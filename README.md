@@ -34,8 +34,8 @@ damoa/
 
 ```bash
 bazel build //...                 # 전체
-bazel build //apps/api:app        # Spring 실행 바이너리
-bazel run   //apps/api:app        # Spring 실행 (개별 jar 클래스패스 → 오토컨피그 정상)
+bazel build //apps/api:boot_jar   # 배포용 Spring Boot 실행 jar (중첩 의존성 → 오토컨피그 정상)
+bazel run   //apps/api:app        # 로컬 실행 (개별 jar 클래스패스)
 bazel test  //apps/api:test       # Spring 테스트 (DB 필요)
 
 bazel build //apps/web:build      # Next 프로덕션 빌드 → apps/web/.next
@@ -67,8 +67,9 @@ cd apps/api && ./gradlew bootRun
 
 `main` 브랜치에 `apps/api/**` 변경이 push 되면 `.github/workflows/deploy-api.yml` 이 동작한다:
 
-1. GitHub Actions(ubuntu) 에서 JDK 25 로 `./gradlew bootJar` → `app.jar` 생성
-2. `apps/api/deploy/` 로 jar 를 스테이징
+1. GitHub Actions(ubuntu) 에서 **Bazel** 로 `//apps/api:boot_jar` 빌드 → Spring Boot 실행 jar 생성
+   (Gradle 아님 — `spring-boot-loader-tools` Repackager 를 Bazel 액션으로 호출)
+2. `bazel-bin/apps/api/boot_jar.jar` 를 `apps/api/deploy/app.jar` 로 스테이징
 3. `8G4B/GSM-SV-Deploy` 액션이 홈서버로 복사 후 `deployspec.yml` 라이프사이클 실행
    - `ApplicationStop` → 기존 `damoa-app` 컨테이너 제거
    - `AfterInstall` → `docker build` (eclipse-temurin:25-jre)
@@ -106,11 +107,13 @@ Vercel 대시보드에서 GitHub 레포를 연결하고:
 
 ## 알려진 메모
 
-- **Bazel 9 + rules_spring**: rules_spring 2.6.3 은 Bazel 9 에서 제거된 레거시 글로벌
-  (`JavaInfo`)을 사용해 동작하지 않는다. 그래서 Spring Boot 실행 jar 대신
-  `java_binary`(rules_java) 로 패키징한다. `bazel run` 은 개별 jar 클래스패스라
-  여러 라이브러리의 `spring.factories` / `AutoConfiguration.imports` 가 모두 정상 로드된다.
-  단일 배포 jar(`app_deploy.jar`)가 필요하면 이 파일들이 충돌하므로 별도 머지 전략이 필요하다.
+- **Spring Boot 실행 jar 패키징**: rules_spring 2.6.3 은 Bazel 9 에서 제거된 레거시 글로벌
+  (`JavaInfo`)을 써서 동작하지 않고, `java_binary` 의 fat `_deploy.jar` 는 여러 의존성의
+  `spring.factories` / `AutoConfiguration.imports` 가 같은 경로에서 충돌해 오토컨피그가 깨진다
+  (실측: 정상 99개 → fat jar 12개). 그래서 `//bazel:spring_boot.bzl` 의 커스텀 `spring_boot_jar`
+  룰이 `spring-boot-loader-tools` 의 `Repackager`(Gradle/Maven 플러그인 내부와 동일)를 Bazel
+  액션으로 호출해 의존성을 `BOOT-INF/lib/*.jar` 로 **중첩**한 정상 실행 jar 를 만든다(`//tools/springboot`).
+  배포·로컬 실행 모두 검증됨(Tomcat 기동, 전체 컨텍스트 로드).
 - **Java 25**: 원격 JDK 25 툴체인이 불안정해 로컬 설치 JDK 25 를 `local_jdk` 로 사용한다(`.bazelrc`).
 - **maven 핀**: Spring Boot BOM 이 버전을 결정적으로 고정하므로 lock 파일 없이도 재현 가능.
   필요 시 `MODULE.bazel` 의 `lock_file` 주석을 해제하고 핀한다.
