@@ -1,0 +1,17 @@
+version: 1.0
+
+# 8G4B/GSM-SV-Deploy 라이프사이클.
+# source_path(apps/api/deploy)가 target_path 로 복사된 뒤 아래 스크립트가 순서대로 실행된다.
+hooks:
+  ApplicationStop:
+    - location: scripts/application_stop.sh
+      timeout: 120
+  AfterInstall:
+    - location: scripts/after_install.sh
+      timeout: 900
+  ApplicationStart:
+    - location: scripts/application_start.sh
+      timeout: 300
+  ValidateService:
+    - location: scripts/validate_service.sh
+      timeout: 180

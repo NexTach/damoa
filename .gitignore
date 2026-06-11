@@ -14,6 +14,9 @@ apps/web/out/
 apps/web/next-env.d.ts
 *.tsbuildinfo
 
+### Deploy (CI 가 빌드해 주입하는 산출물) ###
+apps/api/deploy/app.jar
+
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
