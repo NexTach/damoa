@@ -11,12 +11,13 @@ damoa/
 ├── pnpm-workspace.yaml   # pnpm 워크스페이스 (apps/web)
 ├── apps/
 │   ├── api/              # Spring Boot 4.1 + Kotlin 2.3 (Java 25)
-│   │   ├── BUILD.bazel   #   kt_jvm_library / java_binary / kt_jvm_test
-│   │   ├── build.gradle  #   Gradle fallback (선택)
+│   │   ├── BUILD.bazel   #   kt_jvm_library / spring_boot_jar / kt_jvm_test
+│   │   ├── deploy/       #   Dockerfile · deployspec · 배포 스크립트
 │   │   └── src/
 │   └── web/              # Next.js 15 (App Router, TS, Tailwind v4, Biome)
 │       └── BUILD.bazel   #   next build / dev (aspect_rules_js)
-└── bazel/BUILD.bazel     # Kotlin 2.3 / JVM 25 툴체인
+├── tools/springboot/    # Spring Boot Repackager 빌드 도구
+└── bazel/               # Kotlin/JVM 툴체인, spring_boot.bzl 룰
 ```
 
 - **배포**: `apps/web` → Vercel, `apps/api` → 온프레미스 홈서버 (완전 분리).
@@ -51,12 +52,6 @@ bazel run   //apps/web:dev        # Next 개발 서버
 pnpm --filter @damoa/web dev      # 개발
 pnpm --filter @damoa/web build    # 빌드
 pnpm --filter @damoa/web lint     # Biome
-```
-
-### Gradle (apps/api fallback)
-
-```bash
-cd apps/api && ./gradlew bootRun
 ```
 
 ## 배포
