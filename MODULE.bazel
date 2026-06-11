@@ -44,6 +44,8 @@ maven.install(
         "org.springframework.boot:spring-boot-starter-thymeleaf",
         "org.springframework.boot:spring-boot-starter-webmvc",
         "org.springframework.boot:spring-boot-starter-webclient",
+        # --- Spring Boot Loader Tools (Bazel 네이티브 실행 jar 패키징용; BOM 비관리 → 버전 명시) ---
+        "org.springframework.boot:spring-boot-loader-tools:4.1.0",
         # --- Kotlin / reactor ---
         "org.jetbrains.kotlin:kotlin-reflect",
         "org.jetbrains.kotlinx:kotlinx-coroutines-reactor",

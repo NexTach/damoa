@@ -1,5 +1,6 @@
 load("@rules_java//java:java_binary.bzl", "java_binary")
 load("@rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library", "kt_jvm_test")
+load("//bazel:spring_boot.bzl", "spring_boot_jar")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -36,13 +37,19 @@ kt_jvm_library(
     deps = _DEPS,
 )
 
-# 실행 가능 바이너리.
-# `bazel run //apps/api:app` 은 개별 jar 클래스패스로 실행되어 각 라이브러리의
-# spring.factories / AutoConfiguration.imports 가 모두 정상 로드된다.
+# 로컬 개발 실행: `bazel run //apps/api:app` (개별 jar 클래스패스)
 java_binary(
     name = "app",
     main_class = "io.github.snowykte0426.damoa.DamoaApplicationKt",
     runtime_deps = [":lib"],
+)
+
+# 배포용 Spring Boot 실행 jar (의존성 BOOT-INF/lib 중첩 → 오토컨피그 정상).
+# `bazel build //apps/api:boot_jar` → bazel-bin/apps/api/boot_jar.jar
+spring_boot_jar(
+    name = "boot_jar",
+    app = ":lib",
+    main_class = "io.github.snowykte0426.damoa.DamoaApplicationKt",
 )
 
 kt_jvm_test(

@@ -1,0 +1,12 @@
+load("@rules_java//java:java_binary.bzl", "java_binary")
+
+# Spring Boot Repackager 를 호출하는 빌드 도구(호스트 실행).
+java_binary(
+    name = "repackager",
+    srcs = ["BootRepackage.java"],
+    main_class = "tools.springboot.BootRepackage",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@maven//:org_springframework_boot_spring_boot_loader_tools",
+    ],
+)
