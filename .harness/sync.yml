@@ -1,0 +1,33 @@
+# themoment-ai-harness-sync 설정
+# https://github.com/themoment-team/themoment-ai-harness-sync/wiki
+#
+# 이 파일 하나로 Claude Code / Codex 의 skills·agents·hooks 를 자동 동기화한다.
+# 훅 사용 시 dispatcher + settings 는 반드시 함께 활성화해야 한다.
+groups:
+  - claude
+  - codex
+
+overrides:
+  # --- Claude Code ---
+  claude/hooks/dispatcher: true       # 훅 베이스 (필수)
+  claude/settings: true               # 훅 사용 시 필수
+  claude/hooks/secret-guard: true     # 시크릿/API 키 커밋 차단
+  claude/hooks/command-guard: true    # 위험 명령(rm -rf / 등) 차단
+  claude/hooks/biome: true            # apps/web 저장 시 biome check --write
+  claude/hooks/ts-check: true         # apps/web 저장 시 tsc --noEmit
+  # 아래 Kotlin 훅은 apps/api 에 ktlint/kotest gradle task 가 갖춰지면 true 로 전환
+  # claude/hooks/ktlint: true
+  # claude/hooks/kotest: true
+
+  # --- Codex (Claude 와 독립적인 별도 경로) ---
+  codex/hooks/dispatcher: true
+  codex/hooks-json: true
+  codex/hooks/secret-guard: true
+  codex/hooks/command-guard: true
+  codex/hooks/biome: true
+  # codex/hooks/ktlint: true
+  # codex/hooks/kotest: true
+
+# PR 설정
+base_branch: main
+language: ko
