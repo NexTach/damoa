@@ -59,6 +59,45 @@ pnpm --filter @damoa/web lint     # Biome
 cd apps/api && ./gradlew bootRun
 ```
 
+## 배포
+
+분리 배포: **`apps/web` → Vercel**, **`apps/api` → 온프레미스 홈서버(Mac mini, Docker)**.
+
+### apps/api (홈서버 CD)
+
+`main` 브랜치에 `apps/api/**` 변경이 push 되면 `.github/workflows/deploy-api.yml` 이 동작한다:
+
+1. GitHub Actions(ubuntu) 에서 JDK 25 로 `./gradlew bootJar` → `app.jar` 생성
+2. `apps/api/deploy/` 로 jar 를 스테이징
+3. `8G4B/GSM-SV-Deploy` 액션이 홈서버로 복사 후 `deployspec.yml` 라이프사이클 실행
+   - `ApplicationStop` → 기존 `damoa-app` 컨테이너 제거
+   - `AfterInstall` → `docker build` (eclipse-temurin:25-jre)
+   - `ApplicationStart` → `docker run` (호스트 `10102`→컨테이너 `8080`)
+   - `ValidateService` → `http://127.0.0.1:10102/` 응답 확인
+
+서버 구성(이미 준비됨):
+- 기존 docker `mysql`(3306) / `redis`(6379) 재사용 — 컨테이너에서 `host.docker.internal` 로 접속
+- DB/Redis 시크릿은 레포가 아닌 서버 파일 `~/deploy/secrets/damoa.env` 에 보관(`--env-file`)
+- nginx `kimtaeeun.site` 의 `location /damoa/` → `127.0.0.1:10102` (Cloudflare 가 https 종단)
+- 공개 주소: `https://kimtaeeun.site/damoa/`
+
+**필요한 GitHub Secrets** (레포 Settings → Secrets and variables → Actions):
+
+| Secret | 값 |
+|--------|-----|
+| `HOMESERVER_HOST` | 홈서버 IP |
+| `HOMESERVER_USER` | SSH 사용자명 |
+| `HOMESERVER_PASSWORD` | SSH 비밀번호 |
+
+### apps/web (Vercel)
+
+Vercel 대시보드에서 GitHub 레포를 연결하고:
+- **Root Directory**: `apps/web` (+ "Include files outside root directory" 활성 — pnpm 워크스페이스 설치용)
+- **Framework**: Next.js (자동 감지)
+- **Environment Variables**: `NEXT_PUBLIC_API_BASE_URL=https://kimtaeeun.site/damoa`, `API_BASE_URL=https://kimtaeeun.site/damoa`
+
+`main` push 시 자동 배포된다.
+
 ## AI 하네스
 
 `.harness/sync.yml` 로 Claude Code / Codex 의 skills·agents·hooks 를 동기화한다
