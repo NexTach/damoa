@@ -1,15 +1,13 @@
 directories:
   apps/api
+  apps/web
   tools
   bazel
 
-derive_targets_from_directories: true
+derive_targets_from_directories: false
 
 targets:
   //apps/api:lib
   //apps/api:boot_jar
   //apps/api:test
   //tools/springboot:repackager
-
-additional_languages:
-  kotlin
