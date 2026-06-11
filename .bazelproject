@@ -1,0 +1,15 @@
+directories:
+  apps/api
+  tools
+  bazel
+
+derive_targets_from_directories: true
+
+targets:
+  //apps/api:lib
+  //apps/api:boot_jar
+  //apps/api:test
+  //tools/springboot:repackager
+
+additional_languages:
+  kotlin
