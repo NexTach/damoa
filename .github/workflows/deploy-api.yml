@@ -1,0 +1,48 @@
+name: Deploy API (home server)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Build Spring Boot jar
+        working-directory: apps/api
+        run: |
+          chmod +x gradlew
+          ./gradlew bootJar --no-daemon
+
+      - name: Stage jar into deploy dir
+        run: cp apps/api/build/libs/*.jar apps/api/deploy/app.jar
+
+      # 홈서버(Mac mini, Docker Desktop)로 복사 후 deployspec 라이프사이클 실행:
+      #   ApplicationStop → (copy) → AfterInstall(docker build) → ApplicationStart(docker run) → ValidateService
+      # DB/Redis 시크릿은 레포가 아니라 서버의 /Users/snowykte0426/deploy/secrets/damoa.env 를 사용한다.
+      - name: Deploy to home server
+        uses: 8G4B/GSM-SV-Deploy@v1.2.1
+        with:
+          host: ${{ secrets.HOMESERVER_HOST }}
+          port: "22"
+          user: ${{ secrets.HOMESERVER_USER }}
+          password: ${{ secrets.HOMESERVER_PASSWORD }}
+          source_path: apps/api/deploy
+          target_path: /Users/snowykte0426/deploy/damoa
+          deployspec_path: apps/api/deploy/deployspec.yml
