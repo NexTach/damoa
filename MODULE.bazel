@@ -1,0 +1,101 @@
+"""damoa monorepo — Bazel(bzlmod) 빌드 정의.
+
+- apps/api : Spring Boot 4.1 + Kotlin 2.3 (rules_kotlin / rules_jvm_external / rules_spring)
+- apps/web : Next.js (aspect_rules_js / aspect_rules_ts)
+
+JVM 타겟은 Java 25 이며, 원격 JDK 25 의 불안정성을 피하기 위해 로컬 JDK(local_jdk)를
+런타임/툴 런타임으로 사용한다(.bazelrc 참고).
+"""
+
+module(
+    name = "damoa",
+    version = "0.0.1",
+)
+
+# ---------- 공통 ----------
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "aspect_bazel_lib", version = "2.22.5")
+
+# ---------- JVM (apps/api) ----------
+bazel_dep(name = "rules_java", version = "9.6.1")
+bazel_dep(name = "rules_kotlin", version = "2.3.20")
+bazel_dep(name = "rules_jvm_external", version = "7.0")
+
+# Kotlin 2.3 / JVM 25 커스텀 툴체인 (//bazel:BUILD.bazel)
+register_toolchains("//bazel:kotlin_toolchain")
+
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    name = "maven",
+    # Spring Boot 4.1 BOM 으로 버전 관리 — artifacts 에는 버전을 생략한다.
+    boms = [
+        "org.springframework.boot:spring-boot-dependencies:4.1.0",
+    ],
+    artifacts = [
+        # --- Spring Boot starters (Spring Boot 4.x 분리 스타터 네이밍) ---
+        "org.springframework.boot:spring-boot-starter",
+        "org.springframework.boot:spring-boot-starter-batch",
+        "org.springframework.boot:spring-boot-starter-data-jpa",
+        "org.springframework.boot:spring-boot-starter-data-r2dbc",
+        "org.springframework.boot:spring-boot-starter-data-redis",
+        "org.springframework.boot:spring-boot-starter-graphql",
+        "org.springframework.boot:spring-boot-starter-security",
+        "org.springframework.boot:spring-boot-starter-thymeleaf",
+        "org.springframework.boot:spring-boot-starter-webmvc",
+        "org.springframework.boot:spring-boot-starter-webclient",
+        # --- Kotlin / reactor ---
+        "org.jetbrains.kotlin:kotlin-reflect",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-reactor",
+        "io.projectreactor.kotlin:reactor-kotlin-extensions",
+        "org.thymeleaf.extras:thymeleaf-extras-springsecurity6",
+        # --- Jackson 3 (Spring Boot 4) ---
+        "tools.jackson.module:jackson-module-kotlin",
+        # --- DB drivers (runtime) ---
+        "com.mysql:mysql-connector-j",
+        "io.asyncer:r2dbc-mysql",
+        # --- test ---
+        "org.springframework.boot:spring-boot-starter-test",
+        "org.springframework.boot:spring-boot-starter-batch-test",
+        "org.springframework.boot:spring-boot-starter-data-jpa-test",
+        "org.springframework.boot:spring-boot-starter-data-r2dbc-test",
+        "org.springframework.boot:spring-boot-starter-data-redis-test",
+        "org.springframework.boot:spring-boot-starter-graphql-test",
+        "org.springframework.boot:spring-boot-starter-security-test",
+        "org.springframework.boot:spring-boot-starter-thymeleaf-test",
+        "org.springframework.boot:spring-boot-starter-webmvc-test",
+        "org.springframework.boot:spring-boot-starter-webclient-test",
+        "org.jetbrains.kotlin:kotlin-test-junit5",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-test",
+        "org.junit.platform:junit-platform-launcher",
+    ],
+    # 재현성 핀(선택): `bazel run @maven//:pin` 후 아래 주석 해제
+    #   lock_file = "//:maven_install.json",
+    # 현재는 Spring Boot 4.1 BOM 이 모든 버전을 결정적으로 고정하므로 핀 없이도 안전.
+    repositories = [
+        "https://repo1.maven.org/maven2",
+        "https://repo.spring.io/milestone",
+    ],
+)
+use_repo(maven, "maven")
+
+# ---------- JS / TS (apps/web) ----------
+bazel_dep(name = "aspect_rules_js", version = "3.2.1")
+bazel_dep(name = "aspect_rules_ts", version = "3.8.10")
+bazel_dep(name = "rules_nodejs", version = "6.7.4")
+
+node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node", dev_dependency = True)
+node.toolchain(node_version = "22.14.0")
+
+npm = use_extension("@aspect_rules_js//npm:extensions.bzl", "npm")
+npm.npm_translate_lock(
+    name = "npm",
+    npmrc = "//:.npmrc",
+    pnpm_lock = "//:pnpm-lock.yaml",
+    verify_node_modules_ignored = "//:.bazelignore",
+)
+use_repo(npm, "npm")
+
+rules_ts_ext = use_extension("@aspect_rules_ts//ts:extensions.bzl", "ext")
+rules_ts_ext.deps(ts_version_from = "//apps/web:package.json")
+use_repo(rules_ts_ext, "npm_typescript")

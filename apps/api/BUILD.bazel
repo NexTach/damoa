@@ -1,0 +1,60 @@
+load("@rules_java//java:java_binary.bzl", "java_binary")
+load("@rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library", "kt_jvm_test")
+
+package(default_visibility = ["//visibility:public"])
+
+# 메인 implementation 의존성
+_DEPS = [
+    "@maven//:org_springframework_boot_spring_boot_starter",
+    "@maven//:org_springframework_boot_spring_boot_starter_batch",
+    "@maven//:org_springframework_boot_spring_boot_starter_data_jpa",
+    "@maven//:org_springframework_boot_spring_boot_starter_data_r2dbc",
+    "@maven//:org_springframework_boot_spring_boot_starter_data_redis",
+    "@maven//:org_springframework_boot_spring_boot_starter_graphql",
+    "@maven//:org_springframework_boot_spring_boot_starter_security",
+    "@maven//:org_springframework_boot_spring_boot_starter_thymeleaf",
+    "@maven//:org_springframework_boot_spring_boot_starter_webmvc",
+    "@maven//:org_springframework_boot_spring_boot_starter_webclient",
+    "@maven//:org_jetbrains_kotlin_kotlin_reflect",
+    "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_reactor",
+    "@maven//:io_projectreactor_kotlin_reactor_kotlin_extensions",
+    "@maven//:org_thymeleaf_extras_thymeleaf_extras_springsecurity6",
+    "@maven//:tools_jackson_module_jackson_module_kotlin",
+]
+
+# runtime 전용 (드라이버)
+_RUNTIME_DEPS = [
+    "@maven//:com_mysql_mysql_connector_j",
+    "@maven//:io_asyncer_r2dbc_mysql",
+]
+
+kt_jvm_library(
+    name = "lib",
+    srcs = glob(["src/main/kotlin/**/*.kt"]),
+    resources = glob(["src/main/resources/**"]),
+    runtime_deps = _RUNTIME_DEPS,
+    deps = _DEPS,
+)
+
+# 실행 가능 바이너리.
+# `bazel run //apps/api:app` 은 개별 jar 클래스패스로 실행되어 각 라이브러리의
+# spring.factories / AutoConfiguration.imports 가 모두 정상 로드된다.
+java_binary(
+    name = "app",
+    main_class = "io.github.snowykte0426.damoa.DamoaApplicationKt",
+    runtime_deps = [":lib"],
+)
+
+kt_jvm_test(
+    name = "test",
+    srcs = glob(["src/test/kotlin/**/*.kt"]),
+    test_class = "io.github.snowykte0426.damoa.DamoaApplicationTests",
+    runtime_deps = _RUNTIME_DEPS,
+    deps = _DEPS + [
+        ":lib",
+        "@maven//:org_springframework_boot_spring_boot_starter_test",
+        "@maven//:org_jetbrains_kotlin_kotlin_test_junit5",
+        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_test",
+        "@maven//:org_junit_platform_junit_platform_launcher",
+    ],
+)

@@ -1,0 +1,11 @@
+load("@rules_kotlin//kotlin:core.bzl", "define_kt_toolchain")
+
+# Kotlin 2.3 / JVM 25 툴체인.
+# Spring(allOpen) · JPA(noArg) 플러그인은 런타임 프록시/엔티티에 필요해지면
+# kt_compiler_plugin 으로 추가한다.
+define_kt_toolchain(
+    name = "kotlin_toolchain",
+    api_version = "2.3",
+    jvm_target = "25",
+    language_version = "2.3",
+)

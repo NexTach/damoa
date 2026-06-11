@@ -1,6 +1,19 @@
 HELP.md
 .gradle
 build/
+
+### Bazel ###
+/bazel-*
+MODULE.bazel.lock
+.bazelrc.user
+
+### Node / Next.js ###
+node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/next-env.d.ts
+*.tsbuildinfo
+
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/

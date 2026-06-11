@@ -1,0 +1,18 @@
+# JVM: Java 25 언어 레벨로 컴파일하되, 원격 JDK 25 대신 로컬 설치된 JDK 25 를 사용.
+common --java_language_version=25
+common --tool_java_language_version=25
+common --java_runtime_version=local_jdk
+common --tool_java_runtime_version=local_jdk
+
+# bzlmod (Bazel 9 기본값이지만 명시)
+common --enable_bzlmod
+
+# rules_js: pnpm 심볼릭 node_modules 사용 시 권장
+common --nolegacy_external_runfiles
+
+# 빌드 편의
+build --verbose_failures
+test --test_output=errors
+
+# 로컬 사용자별 오버라이드 (선택)
+try-import %workspace%/.bazelrc.user

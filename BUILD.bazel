@@ -1,0 +1,12 @@
+"""루트 패키지 — 워크스페이스 전역 파일 노출 + pnpm 워크스페이스 루트 node_modules 링크."""
+
+load("@npm//:defs.bzl", "npm_link_all_packages")
+
+# pnpm 워크스페이스 루트에 호이스트된 패키지(typescript 등)를 Bazel 에 링크
+npm_link_all_packages(name = "node_modules")
+
+exports_files([
+    "pnpm-lock.yaml",
+    ".bazelignore",
+    ".npmrc",
+])
