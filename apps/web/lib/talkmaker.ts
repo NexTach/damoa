@@ -59,6 +59,19 @@ const tm = <T>(path: string, init?: RequestInit) =>
 
 export const isAuthError = (e: unknown) => e instanceof AuthError;
 
+/** Public URL for a stored object key (used for persona avatars). */
+export const fileUrl = (key: string) => `${BASE}/api/files/${key}`;
+
+export type OgPreview = {
+  url: string;
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  siteName: string | null;
+};
+export const fetchOg = (url: string) =>
+  tm<OgPreview>(`/og?url=${encodeURIComponent(url)}`);
+
 export const fetchMe = () => req<Me>("/api/auth/me");
 
 export const listPersonas = () => tm<Persona[]>("/personas");

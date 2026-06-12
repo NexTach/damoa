@@ -1,0 +1,9 @@
+package io.github.snowykte0426.damoa.talkmaker
+
+data class OgResponse(
+    val url: String,
+    val title: String?,
+    val description: String?,
+    val image: String?,
+    val siteName: String?,
+)

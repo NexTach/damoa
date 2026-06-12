@@ -12,6 +12,8 @@ import {
   deletePersona,
   deleteRoom,
   fetchMe,
+  fetchOg,
+  fileUrl,
   getToken,
   isAuthError,
   listMessages,
@@ -20,10 +22,12 @@ import {
   loginUrl,
   type Me,
   type Message,
+  type OgPreview,
   type Persona,
   type Room,
   setToken,
   updateMessage,
+  updatePersona,
   updateRoom,
   uploadAttachment,
 } from "@/lib/talkmaker";
@@ -53,8 +57,99 @@ const toLocalInput = (iso: string) => {
   return local.toISOString().slice(0, 16);
 };
 
+const URL_RE = /(https?:\/\/[^\s]+)/gi;
+const firstUrl = (s: string) => s.match(/(https?:\/\/[^\s]+)/i)?.[0] ?? null;
+
+// Renders message text with clickable links.
+function renderContent(text: string) {
+  return text.split(URL_RE).map((part, i) =>
+    /^https?:\/\//i.test(part) ? (
+      <a
+        // biome-ignore lint/suspicious/noArrayIndexKey: split is stable per render
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="underline underline-offset-2 opacity-90 hover:opacity-100"
+      >
+        {part}
+      </a>
+    ) : (
+      // biome-ignore lint/suspicious/noArrayIndexKey: split is stable per render
+      <span key={i}>{part}</span>
+    ),
+  );
+}
+
+const ogCache = new Map<string, OgPreview | null>();
+
+function LinkPreview({ url }: { url: string }) {
+  const [og, setOg] = useState<OgPreview | null | undefined>(() =>
+    ogCache.get(url),
+  );
+  useEffect(() => {
+    if (ogCache.has(url)) {
+      setOg(ogCache.get(url));
+      return;
+    }
+    let alive = true;
+    fetchOg(url)
+      .then((d) => {
+        ogCache.set(url, d);
+        if (alive) setOg(d);
+      })
+      .catch(() => {
+        ogCache.set(url, null);
+        if (alive) setOg(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+  if (!og || (!og.title && !og.image && !og.description)) return null;
+  return (
+    <a
+      href={og.url}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="mt-1 block w-64 max-w-full overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--bg-2)] text-left transition-colors hover:border-[var(--muted)]"
+    >
+      {og.image && (
+        <img src={og.image} alt="" className="h-32 w-full object-cover" />
+      )}
+      <div className="p-3">
+        {og.siteName && (
+          <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--muted)]">
+            {og.siteName}
+          </div>
+        )}
+        {og.title && (
+          <div className="mt-1 line-clamp-2 text-[13px] font-medium text-[var(--fg)]">
+            {og.title}
+          </div>
+        )}
+        {og.description && (
+          <div className="mt-1 line-clamp-2 text-[11px] text-[var(--muted)]">
+            {og.description}
+          </div>
+        )}
+      </div>
+    </a>
+  );
+}
+
 function Avatar({ persona, size = 32 }: { persona?: Persona; size?: number }) {
   const color = persona?.color ?? "#555";
+  if (persona?.avatarUrl) {
+    return (
+      <img
+        src={persona.avatarUrl}
+        alt={persona.name}
+        className="shrink-0 rounded-full object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   return (
     <span
       className="grid shrink-0 place-items-center rounded-full font-display text-black"
@@ -86,6 +181,7 @@ export default function TalkmakerPage() {
     url: string;
   } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [sending, setSending] = useState(false);
   const [editing, setEditing] = useState<{
     id: number;
     personaId: number;
@@ -95,6 +191,7 @@ export default function TalkmakerPage() {
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const busy = sending || uploading;
 
   const openRoom = useCallback(async (r: Room) => {
     setRoom(r);
@@ -149,6 +246,16 @@ export default function TalkmakerPage() {
   const removePersona = async (id: number) => {
     await deletePersona(id);
     setPersonas((cur) => cur.filter((p) => p.id !== id));
+  };
+  const setPersonaAvatar = async (p: Persona, file: File) => {
+    const { key } = await uploadAttachment(file);
+    const updated = await updatePersona(p.id, {
+      name: p.name,
+      color: p.color,
+      avatarUrl: fileUrl(key),
+      bio: p.bio,
+    });
+    setPersonas((cur) => cur.map((x) => (x.id === updated.id ? updated : x)));
   };
 
   const newRoom = async () => {
@@ -207,19 +314,24 @@ export default function TalkmakerPage() {
   };
 
   const send = async () => {
-    if (!room || sender == null) return;
+    if (!room || sender == null || sending) return;
     if (!draft.trim() && !pending) return;
-    const msg = await createMessage(room.id, {
-      personaId: sender,
-      content: draft.trim(),
-      attachmentKey: pending?.key,
-      attachmentType: pending?.type,
-    });
-    setMessages((cur) => [...cur, msg]);
-    setDraft("");
-    if (pending) URL.revokeObjectURL(pending.url);
-    setPending(null);
-    refreshRooms();
+    setSending(true);
+    try {
+      const msg = await createMessage(room.id, {
+        personaId: sender,
+        content: draft.trim(),
+        attachmentKey: pending?.key,
+        attachmentType: pending?.type,
+      });
+      setMessages((cur) => [...cur, msg]);
+      setDraft("");
+      if (pending) URL.revokeObjectURL(pending.url);
+      setPending(null);
+      refreshRooms();
+    } finally {
+      setSending(false);
+    }
   };
   const removeMessage = async (id: number) => {
     if (!room) return;
@@ -236,19 +348,24 @@ export default function TalkmakerPage() {
     });
 
   const saveEdit = async () => {
-    if (!room || !editing) return;
-    const msg = await updateMessage(room.id, editing.id, {
-      personaId: editing.personaId,
-      content: editing.content,
-      sentAt: new Date(editing.at).toISOString(),
-    });
-    setMessages((cur) =>
-      cur
-        .map((m) => (m.id === msg.id ? msg : m))
-        .sort((a, b) => a.sentAt.localeCompare(b.sentAt) || a.id - b.id),
-    );
-    setEditing(null);
-    refreshRooms();
+    if (!room || !editing || sending) return;
+    setSending(true);
+    try {
+      const msg = await updateMessage(room.id, editing.id, {
+        personaId: editing.personaId,
+        content: editing.content,
+        sentAt: new Date(editing.at).toISOString(),
+      });
+      setMessages((cur) =>
+        cur
+          .map((m) => (m.id === msg.id ? msg : m))
+          .sort((a, b) => a.sentAt.localeCompare(b.sentAt) || a.id - b.id),
+      );
+      setEditing(null);
+      refreshRooms();
+    } finally {
+      setSending(false);
+    }
   };
 
   const logout = () => {
@@ -333,6 +450,7 @@ export default function TalkmakerPage() {
           personas={personas}
           onAdd={addPersona}
           onDelete={removePersona}
+          onAvatar={setPersonaAvatar}
         />
 
         {/* 채팅방 */}
@@ -429,26 +547,35 @@ export default function TalkmakerPage() {
           {/* 메시지 */}
           <div
             ref={scrollRef}
-            className="flex-1 space-y-3 overflow-y-auto px-4 py-5 md:px-6 md:py-6"
+            className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6"
           >
             {messages.length === 0 && (
               <div className="grid h-full place-items-center font-mono text-[11px] tracking-[0.2em] text-[var(--muted)]">
                 아래에서 보낸 사람을 고르고 대사를 입력하세요
               </div>
             )}
-            {messages.map((m) => {
+            {messages.map((m, i) => {
               const p = personaBy(m.personaId);
               const mine = m.personaId === room.selfPersonaId;
+              // Group consecutive messages from the same persona.
+              const grouped =
+                i > 0 && messages[i - 1].personaId === m.personaId;
+              const url = m.content ? firstUrl(m.content) : null;
               return (
                 <div
                   key={m.id}
-                  className={`group flex items-start gap-2 ${mine ? "flex-row-reverse" : ""}`}
+                  className={`group flex items-start gap-2 ${grouped ? "mt-0.5" : "mt-4"} ${mine ? "flex-row-reverse" : ""}`}
                 >
-                  {!mine && <Avatar persona={p} size={28} />}
+                  {!mine &&
+                    (grouped ? (
+                      <div className="w-7 shrink-0" />
+                    ) : (
+                      <Avatar persona={p} size={28} />
+                    ))}
                   <div
                     className={`max-w-[68%] ${mine ? "items-end text-right" : ""} flex flex-col`}
                   >
-                    {!mine && (
+                    {!mine && !grouped && (
                       <span className="mb-1 font-mono text-[10px] text-[var(--muted)]">
                         {p?.name}
                       </span>
@@ -498,16 +625,18 @@ export default function TalkmakerPage() {
                           <button
                             type="button"
                             onClick={() => setEditing(null)}
-                            className="px-2 py-1 text-[var(--muted)] hover:text-[var(--fg)]"
+                            disabled={sending}
+                            className="px-2 py-1 text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-40"
                           >
                             취소
                           </button>
                           <button
                             type="button"
                             onClick={saveEdit}
-                            className="rounded-md bg-[var(--fg)] px-3 py-1 text-[var(--bg)]"
+                            disabled={sending}
+                            className="rounded-md bg-[var(--fg)] px-3 py-1 text-[var(--bg)] disabled:opacity-40"
                           >
-                            저장
+                            {sending ? "저장 중…" : "저장"}
                           </button>
                         </div>
                       </div>
@@ -525,9 +654,10 @@ export default function TalkmakerPage() {
                                   }
                             }
                           >
-                            {m.content}
+                            {renderContent(m.content)}
                           </div>
                         )}
+                        {url && <LinkPreview url={url} />}
                         <span className="mt-1 flex items-center gap-2 font-mono text-[9px] text-[var(--muted)]">
                           {timeOf(m.sentAt)}
                           <button
@@ -626,7 +756,7 @@ export default function TalkmakerPage() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                disabled={sender == null || uploading}
+                disabled={sender == null || busy}
                 title="사진·동영상 첨부"
                 className="rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2.5 text-sm text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30"
               >
@@ -643,20 +773,18 @@ export default function TalkmakerPage() {
                 }}
                 rows={1}
                 placeholder={
-                  sender != null
-                    ? "대사 입력 (Enter 전송, Shift+Enter 줄바꿈)"
-                    : "보낸 사람을 먼저 고르세요"
+                  sender != null ? "메시지 보내기" : "보낸 사람을 먼저 고르세요"
                 }
-                disabled={sender == null}
-                className="max-h-32 flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none placeholder:text-[var(--muted)] focus:border-[var(--muted)]"
+                disabled={sender == null || busy}
+                className="max-h-32 flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50"
               />
               <button
                 type="button"
                 onClick={send}
-                disabled={sender == null || (!draft.trim() && !pending)}
-                className="rounded-xl bg-[var(--fg)] px-4 py-2.5 font-mono text-xs text-[var(--bg)] disabled:opacity-30"
+                disabled={sender == null || busy || (!draft.trim() && !pending)}
+                className="rounded-xl bg-[var(--fg)] px-4 py-2.5 font-mono text-xs text-[var(--bg)] transition-opacity disabled:opacity-30"
               >
-                전송
+                {sending ? "전송 중…" : "전송"}
               </button>
             </div>
           </div>
@@ -670,24 +798,67 @@ function PersonaManager({
   personas,
   onAdd,
   onDelete,
+  onAvatar,
 }: {
   personas: Persona[];
   onAdd: (name: string) => void;
   onDelete: (id: number) => void;
+  onAvatar: (p: Persona, file: File) => Promise<void>;
 }) {
   const [name, setName] = useState("");
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const targetRef = useRef<Persona | null>(null);
+
+  const pickAvatar = (p: Persona) => {
+    targetRef.current = p;
+    avatarInput.current?.click();
+  };
+  const onAvatarChange = async (file: File | null) => {
+    const p = targetRef.current;
+    if (!file || !p) return;
+    setBusyId(p.id);
+    try {
+      await onAvatar(p, file);
+    } catch {
+      alert("프로필 사진 변경에 실패했어요.");
+    } finally {
+      setBusyId(null);
+      if (avatarInput.current) avatarInput.current.value = "";
+    }
+  };
+
   return (
     <div className="border-b border-[var(--line)] px-4 pb-3 pt-1">
       <div className="pb-2 font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
         PERSONAS
       </div>
+      <input
+        ref={avatarInput}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => onAvatarChange(e.target.files?.[0] ?? null)}
+      />
       <div className="flex flex-wrap gap-1.5">
         {personas.map((p) => (
           <span
             key={p.id}
             className="group flex items-center gap-1.5 rounded-full border border-[var(--line)] py-0.5 pl-0.5 pr-2 text-[11px]"
           >
-            <Avatar persona={p} size={18} />
+            <button
+              type="button"
+              onClick={() => pickAvatar(p)}
+              title="프로필 사진 변경"
+              className="relative shrink-0 rounded-full opacity-100 transition-opacity hover:opacity-80"
+            >
+              <Avatar persona={p} size={18} />
+              {busyId === p.id && (
+                <span className="absolute inset-0 grid place-items-center rounded-full bg-black/50 text-[7px] text-white">
+                  …
+                </span>
+              )}
+            </button>
             {p.name}
             <button
               type="button"
