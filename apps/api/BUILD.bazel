@@ -20,6 +20,8 @@ _DEPS = [
     "@maven//:org_thymeleaf_extras_thymeleaf_extras_springsecurity6",
     "@maven//:tools_jackson_module_jackson_module_kotlin",
     "@maven//:com_nimbusds_nimbus_jose_jwt",
+    "@maven//:software_amazon_awssdk_s3",
+    "@maven//:software_amazon_awssdk_url_connection_client",
 ]
 
 _RUNTIME_DEPS = [

@@ -1,6 +1,7 @@
 package io.github.snowykte0426.damoa.talkmaker
 
 import io.github.snowykte0426.damoa.common.notFound
+import io.github.snowykte0426.damoa.config.AppProperties
 import java.time.Instant
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -9,11 +10,14 @@ import org.springframework.transaction.annotation.Transactional
 class MessageServiceImpl(
     private val repository: MessageRepository,
     private val roomService: RoomService,
+    props: AppProperties,
 ) : MessageService {
+    private val publicBase = props.s3.publicBase
+
     @Transactional(readOnly = true)
     override fun list(ownerId: Long, roomId: Long): List<MessageResponse> {
         roomService.requireOwned(ownerId, roomId)
-        return repository.findByRoomIdOrderBySentAtAscIdAsc(roomId).map { it.toResponse() }
+        return repository.findByRoomIdOrderBySentAtAscIdAsc(roomId).map { it.toResponse(publicBase) }
     }
 
     @Transactional
@@ -23,11 +27,13 @@ class MessageServiceImpl(
             roomId = roomId,
             personaId = req.personaId,
             content = req.content,
+            attachmentKey = req.attachmentKey,
+            attachmentType = req.attachmentType,
             sentAt = req.sentAt ?: Instant.now(),
         )
         val saved = repository.save(message)
         roomService.touch(roomId)
-        return saved.toResponse()
+        return saved.toResponse(publicBase)
     }
 
     @Transactional
@@ -37,7 +43,7 @@ class MessageServiceImpl(
         message.content = req.content
         message.personaId = req.personaId
         req.sentAt?.let { message.sentAt = it }
-        return repository.save(message).toResponse()
+        return repository.save(message).toResponse(publicBase)
     }
 
     @Transactional

@@ -17,6 +17,9 @@ open class Message(
     open var personaId: Long = 0, // the persona that "sent" this message
     @Column(columnDefinition = "TEXT")
     open var content: String = "",
+    open var attachmentKey: String? = null, // storage object key, null once expired
+    open var attachmentType: String? = null, // attachment mime type
+    open var attachmentExpired: Boolean = false, // true after the file was auto-purged
     open var sentAt: Instant = Instant.now(), // editable display time, used for ordering
     open var createdAt: Instant = Instant.now(),
 )

@@ -27,6 +27,10 @@ spring:
       initialize-schema: always
     job:
       enabled: false
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 26MB
 
 server:
   port: ${SERVER_PORT:8080}
@@ -37,6 +41,14 @@ server:
 app:
   jwt-secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef0123456789abcdef}
   frontend-url: ${APP_FRONTEND_URL:http://localhost:3000}
+  attachment-ttl-days: ${ATTACHMENT_TTL_DAYS:30}
+  s3:
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    region: ${S3_REGION:us-east-1}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
+    bucket: ${S3_BUCKET:talkmaker}
+    public-base: ${S3_PUBLIC_BASE:http://localhost:8080}
   datagsm:
     auth-base: ${DATAGSM_AUTH_BASE:https://oauth.authorization.datagsm.kr}
     resource-base: ${DATAGSM_RESOURCE_BASE:https://oauth.resource.datagsm.kr}

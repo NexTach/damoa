@@ -1,5 +1,6 @@
 package io.github.snowykte0426.damoa.talkmaker
 
+import java.time.Instant
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface MessageRepository : JpaRepository<Message, Long> {
@@ -8,4 +9,8 @@ interface MessageRepository : JpaRepository<Message, Long> {
     fun findByIdAndRoomId(id: Long, roomId: Long): Message?
 
     fun deleteByRoomId(roomId: Long)
+
+    fun findByAttachmentKeyIsNotNullAndAttachmentExpiredFalseAndCreatedAtBefore(
+        cutoff: Instant,
+    ): List<Message>
 }

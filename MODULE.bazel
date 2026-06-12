@@ -54,6 +54,9 @@ maven.install(
         "tools.jackson.module:jackson-module-kotlin",
         # --- JWT (BOM 비관리 → 버전 명시) ---
         "com.nimbusds:nimbus-jose-jwt:9.48",
+        # --- S3 호환 스토리지(MinIO) 용 AWS SDK v2 ---
+        "software.amazon.awssdk:s3:2.31.6",
+        "software.amazon.awssdk:url-connection-client:2.31.6",
         # --- DB drivers (runtime) ---
         "com.mysql:mysql-connector-j",
         # --- test ---

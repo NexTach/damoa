@@ -6,5 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 data class AppProperties(
     val jwtSecret: String = "",
     val frontendUrl: String = "",
+    val attachmentTtlDays: Long = 30,
     val datagsm: DataGsmProperties = DataGsmProperties(),
+    val s3: S3Properties = S3Properties(),
 )
