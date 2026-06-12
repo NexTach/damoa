@@ -94,7 +94,7 @@ class DataGsmOAuthController(
             append("?response_type=code")
             append("&client_id=").append(enc(d.clientId))
             append("&redirect_uri=").append(enc(d.redirectUri))
-            append("&scope=").append(enc(d.scope))
+            if (d.scope.isNotBlank()) append("&scope=").append(enc(d.scope))
             append("&state=").append(state)
             append("&code_challenge=").append(s256(verifier))
             append("&code_challenge_method=S256")

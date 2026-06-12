@@ -27,7 +27,8 @@ data class AppProperties(
         val clientId: String = "",
         val clientSecret: String = "",
         val redirectUri: String = "",
-        val scope: String = "self:read",
+        // 빈 값이면 scope 파라미터를 아예 보내지 않음 (이 클라이언트는 허용 스코프가 없어 scope를 보내면 invalid_scope)
+        val scope: String = "",
     )
 }
 
