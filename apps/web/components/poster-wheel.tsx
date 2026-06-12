@@ -1,15 +1,20 @@
 "use client";
 
-import { Billboard, RoundedBox, Text } from "@react-three/drei";
+import {
+  Billboard,
+  MeshTransmissionMaterial,
+  RoundedBox,
+  Text,
+} from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import type * as THREE from "three";
 import { LABS, type Lab } from "@/lib/labs";
 
-// 토성 고리 느낌: 큰 반지름 + 강한 기울기 + 대각선 회전
-const R = 3.3; // 고리 반지름
-const TILT = 1.02; // 기울기(rad) — 거의 옆에서 보듯 납작한 타원
-const DIAG = -0.5; // 대각선 회전(rad) — 가까운쪽 우상단 / 먼쪽 좌하단
+// 토성 고리 — 길고 극단적인 / 대각선. 먼쪽은 멀어져 안개로 사라진다.
+const R = 4.7; // 고리 반지름
+const TILT = 1.06; // 기울기(rad)
+const DIAG = -0.55; // 대각선 회전 — 가까운쪽 우상단 / 먼쪽 좌하단
 const COSD = Math.cos(DIAG);
 const SIND = Math.sin(DIAG);
 const MAX_VEL = 0.22;
@@ -27,64 +32,64 @@ function PosterCard({
 }) {
   const group = useRef<THREE.Group>(null);
   const glow = useRef<THREE.MeshStandardMaterial>(null);
-  const body = useRef<THREE.MeshPhysicalMaterial>(null);
 
   useFrame(() => {
     const g = group.current;
     if (!g) return;
     const slot = (Math.PI * 2) / count;
     const ang = index * slot + offsetRef.current;
-    // 수평 고리(XZ 평면)를 X로 기울이고, 다시 화면에서 대각선으로 회전
     const cx = Math.sin(ang) * R;
     const cy = Math.cos(ang) * R * Math.cos(TILT);
     const cz = Math.cos(ang) * R * Math.sin(TILT);
     g.position.set(cx * COSD - cy * SIND, cx * SIND + cy * COSD, cz);
-    const f = (Math.cos(ang) + 1) / 2; // 1 = 정면(카메라에 가까움)
-    g.scale.setScalar(0.5 + f * 0.78);
+    const f = (Math.cos(ang) + 1) / 2; // 1 = 정면(가까움)
+    g.scale.setScalar(0.22 + f * 1.18); // 먼쪽은 아주 작게
     g.renderOrder = Math.round(f * 30);
     if (glow.current) {
-      glow.current.emissiveIntensity = 0.15 + f * 1.3;
-      glow.current.opacity = 0.2 + f * 0.6;
+      glow.current.emissiveIntensity = f * 1.7;
+      glow.current.opacity = f * f * 0.85; // 먼쪽 글로우는 빠르게 0
     }
-    if (body.current) body.current.opacity = 0.4 + f * 0.5;
   });
 
   return (
     <Billboard ref={group}>
-      {/* 컬러 글로우(유리 가장자리 빛) */}
-      <RoundedBox args={[1.58, 2.16, 0.02]} radius={0.09} smoothness={4}>
+      {/* 컬러 글로우(유리 뒤 빛) */}
+      <RoundedBox
+        args={[1.62, 2.2, 0.02]}
+        radius={0.13}
+        smoothness={5}
+        position={[0, 0, -0.05]}
+      >
         <meshStandardMaterial
           ref={glow}
           color={lab.color}
           emissive={lab.color}
-          emissiveIntensity={0.6}
+          emissiveIntensity={0.8}
           transparent
-          opacity={0.4}
+          opacity={0.5}
           depthWrite={false}
           toneMapped={false}
         />
       </RoundedBox>
-      {/* 프로스트 유리 본체 */}
-      <RoundedBox
-        args={[1.5, 2.08, 0.1]}
-        radius={0.08}
-        smoothness={4}
-        position={[0, 0, 0.02]}
-      >
-        <meshPhysicalMaterial
-          ref={body}
-          color="#0d0f16"
-          transparent
-          opacity={0.55}
-          roughness={0.2}
-          metalness={0}
-          clearcoat={1}
-          clearcoatRoughness={0.25}
-          toneMapped={false}
+      {/* 애플식 프로스트 글래스 */}
+      <RoundedBox args={[1.5, 2.08, 0.16]} radius={0.12} smoothness={5}>
+        <MeshTransmissionMaterial
+          samples={4}
+          resolution={200}
+          transmission={1}
+          thickness={0.7}
+          roughness={0.22}
+          ior={1.2}
+          chromaticAberration={0.05}
+          distortion={0.1}
+          distortionScale={0.15}
+          temporalDistortion={0}
+          color="#e6ecf5"
+          backside={false}
         />
       </RoundedBox>
       <Text
-        position={[0, 0.2, 0.09]}
+        position={[0, 0.2, 0.1]}
         fontSize={1.0}
         color={lab.color}
         anchorX="center"
@@ -95,7 +100,7 @@ function PosterCard({
         {lab.index}
       </Text>
       <Text
-        position={[0, -0.78, 0.09]}
+        position={[0, -0.78, 0.1]}
         fontSize={0.15}
         maxWidth={1.28}
         textAlign="center"
@@ -197,7 +202,7 @@ export default function PosterWheel({
 }) {
   return (
     <Canvas
-      camera={{ position: [0, 0, 9], fov: 40 }}
+      camera={{ position: [0, 0, 9.5], fov: 42 }}
       dpr={[1, 2]}
       gl={{ antialias: true, powerPreference: "high-performance" }}
       onCreated={({ gl }) => {
@@ -209,12 +214,12 @@ export default function PosterWheel({
       }}
     >
       <color attach="background" args={["#08080a"]} />
-      <fog attach="fog" args={["#08080a", 7, 19]} />
-      <ambientLight intensity={0.9} />
-      <directionalLight position={[3, 5, 6]} intensity={1.0} />
+      <fog attach="fog" args={["#08080a", 6, 13.5]} />
+      <ambientLight intensity={1.1} />
+      <directionalLight position={[3, 5, 6]} intensity={1.2} />
       <directionalLight
         position={[-4, -2, 1]}
-        intensity={0.3}
+        intensity={0.4}
         color="#6f8cff"
       />
       <Wheel onActive={onActiveChange} />
