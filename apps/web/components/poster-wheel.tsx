@@ -133,11 +133,20 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
       dragging.current = false;
       el.style.cursor = "grab";
     };
+    // 마우스 휠/트랙패드 스크롤로 회전
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta =
+        Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      vel.current += delta * 0.0006;
+    };
     el.addEventListener("pointerdown", down);
+    el.addEventListener("wheel", wheel, { passive: false });
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     return () => {
       el.removeEventListener("pointerdown", down);
+      el.removeEventListener("wheel", wheel);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };

@@ -104,7 +104,7 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-2 font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
               <span className="hidden md:inline">←</span>
-              DRAG TO SPIN
+              DRAG · SCROLL TO SPIN
               <span className="hidden md:inline">→</span>
             </div>
           </div>
