@@ -94,7 +94,6 @@ open class RoomService(private val repository: RoomRepository) {
         repository.delete(find(ownerId, id))
     }
 
-    /** 방 소유 검증 (메시지 서비스에서도 사용) */
     @Transactional(readOnly = true)
     open fun requireOwned(ownerId: Long, id: Long) {
         find(ownerId, id)

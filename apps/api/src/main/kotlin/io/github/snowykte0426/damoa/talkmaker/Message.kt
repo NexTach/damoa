@@ -27,10 +27,12 @@ open class Message(
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     open var id: Long = 0,
     open var roomId: Long = 0,
-    open var personaId: Long = 0, // 보낸 사람(페르소나)
+    // the person a that "says" this message, not necessarily the one owned by the user
+    // (e.g. system messages can have a special personaId)
+    open var personaId: Long = 0,
     @Column(columnDefinition = "TEXT")
     open var content: String = "",
-    open var sentAt: Instant = Instant.now(), // 표시용 시각(편집 가능)
+    open var sentAt: Instant = Instant.now(), // allow client to specify sent time for better ordering, but default to now
     open var createdAt: Instant = Instant.now(),
 )
 

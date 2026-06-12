@@ -37,7 +37,7 @@ class DataGsmClient(
             ?: throw ResponseStatusException(HttpStatus.BAD_GATEWAY, "access_token 없음")
     }
 
-    /** access token → 사용자 정보 */
+    /** access token → user info */
     fun userInfo(accessToken: String): DataGsmUser {
         @Suppress("UNCHECKED_CAST")
         val resp = webClient.get()
@@ -50,7 +50,7 @@ class DataGsmClient(
         val id = (resp["id"] as? Number)?.toLong()
             ?: throw ResponseStatusException(HttpStatus.BAD_GATEWAY, "userinfo id 없음")
         val email = resp["email"] as? String ?: ""
-        val student = resp["student"] as? Map<String, Any?>
+        val student = resp["student"] as? Map<*, *>
         val name = (student?.get("name") as? String)
             ?: email.substringBefore("@").ifBlank { "user$id" }
         return DataGsmUser(id, email, name)

@@ -37,7 +37,10 @@ private fun s256(verifier: String): String {
 
 private fun enc(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)
 
-/** OAuth state→code_verifier 임시 저장 (단일 인스턴스 인메모리, TTL 10분) */
+/**
+ * Temp in-memory store for pending OAuth states. In production, consider using a shared cache like Redis if you have multiple instances.
+ * States are automatically expired after 10 minutes to prevent memory bloat. This is a simple implementation and may not be suitable for high load or distributed environments.
+ */
 @Component
 class OAuthStateStore {
     private data class Pending(val verifier: String, val expiresAt: Long)
@@ -76,7 +79,9 @@ class DataGsmOAuthController(
     private val props: AppProperties,
     private val stateStore: OAuthStateStore,
 ) {
-    /** DataGSM authorize 로 리다이렉트 (state + PKCE 생성) */
+    /**
+     * Start OAuth flow by generating state and PKCE verifier, storing them, and redirecting to DataGSM's authorization endpoint with appropriate query parameters.
+     */
     @GetMapping("/start")
     fun start(response: HttpServletResponse) {
         val state = randomToken(24)
@@ -97,7 +102,9 @@ class DataGsmOAuthController(
         response.sendRedirect(url)
     }
 
-    /** DataGSM 콜백: code 교환 → userinfo → User upsert → 우리 JWT 발급 → 프론트로 리다이렉트 */
+    /**
+     * Callback from DataGSM after user authorizes. Validates state and PKCE, exchanges code for token, fetches user info, upserts user in DB, issues JWT, and redirects to frontend with token in hash fragment.
+     */
     @GetMapping("/callback")
     fun callback(
         @RequestParam code: String,

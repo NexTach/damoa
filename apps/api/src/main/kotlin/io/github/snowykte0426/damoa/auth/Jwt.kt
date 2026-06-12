@@ -10,48 +10,61 @@ import io.github.snowykte0426.damoa.config.AppProperties
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import java.util.Date
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.web.filter.OncePerRequestFilter
+import java.util.Date
 
 @Service
-class JwtService(props: AppProperties) {
+class JwtService(
+    props: AppProperties,
+) {
     private val key = props.jwtSecret.toByteArray()
-    private val ttlMillis = 7L * 24 * 60 * 60 * 1000 // 7일
+    private val ttlMillis = 7L * 24 * 60 * 60 * 1000 // 7 Days
 
-    fun issue(userId: Long, name: String, email: String): String {
+    fun issue(
+        userId: Long,
+        name: String,
+        email: String,
+    ): String {
         val now = Date()
-        val claims = JWTClaimsSet.Builder()
-            .subject(userId.toString())
-            .claim("name", name)
-            .claim("email", email)
-            .issueTime(now)
-            .expirationTime(Date(now.time + ttlMillis))
-            .build()
+        val claims =
+            JWTClaimsSet
+                .Builder()
+                .subject(userId.toString())
+                .claim("name", name)
+                .claim("email", email)
+                .issueTime(now)
+                .expirationTime(Date(now.time + ttlMillis))
+                .build()
         val jwt = SignedJWT(JWSHeader(JWSAlgorithm.HS256), claims)
         jwt.sign(MACSigner(key))
         return jwt.serialize()
     }
 
-    /** 유효하면 userId, 아니면 null */
-    fun validate(token: String): Long? = try {
-        val jwt = SignedJWT.parse(token)
-        if (!jwt.verify(MACVerifier(key))) {
+    /**
+     * Validate the JWT token and return the user ID if valid, otherwise null.
+     */
+    fun validate(token: String): Long? =
+        try {
+            val jwt = SignedJWT.parse(token)
+            if (!jwt.verify(MACVerifier(key))) {
+                null
+            } else {
+                val claims = jwt.jwtClaimsSet
+                if (claims.expirationTime?.before(Date()) != false) null else claims.subject.toLong()
+            }
+        } catch (_: Exception) {
             null
-        } else {
-            val claims = jwt.jwtClaimsSet
-            if (claims.expirationTime?.before(Date()) != false) null else claims.subject.toLong()
         }
-    } catch (_: Exception) {
-        null
-    }
 }
 
 @Component
-class JwtAuthFilter(private val jwtService: JwtService) : OncePerRequestFilter() {
+class JwtAuthFilter(
+    private val jwtService: JwtService,
+) : OncePerRequestFilter() {
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,

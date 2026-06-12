@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional
 @Table(name = "users")
 open class User(
     @Id
-    open var id: Long = 0, // DataGSM 사용자 id (assigned)
+    open var id: Long = 0, // data-gsm user id
     open var email: String = "",
     open var name: String = "",
     open var createdAt: Instant = Instant.now(),
