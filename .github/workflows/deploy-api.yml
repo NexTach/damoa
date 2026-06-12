@@ -47,17 +47,11 @@ jobs:
 
       # CD 통합 시크릿: GitHub Secret(DAMOA_ENV, 전체 env 내용)을 app.env 로 써서 함께 배포.
       # 컨테이너는 application_start.sh 에서 이 파일을 --env-file 로 로드한다.
-      # DataGSM 자격증명은 별도 시크릿으로 두어 채팅 공유 없이 직접 등록 가능.
-      # app.env 뒤에 append → docker --env-file 은 뒤 항목이 우선이라 DAMOA_ENV 의 빈 값을 덮어쓴다.
-      - name: Write env file from secrets
+      # 모든 런타임 env 는 단일 GitHub Secret(DAMOA_ENV)에 모아 일관되게 관리한다.
+      - name: Write env file from secret
         env:
           DAMOA_ENV: ${{ secrets.DAMOA_ENV }}
-          DATAGSM_CLIENT_ID: ${{ secrets.DATAGSM_CLIENT_ID }}
-          DATAGSM_CLIENT_SECRET: ${{ secrets.DATAGSM_CLIENT_SECRET }}
-        run: |
-          printf '%s\n' "$DAMOA_ENV" > apps/api/deploy/app.env
-          printf 'DATAGSM_CLIENT_ID=%s\n' "$DATAGSM_CLIENT_ID" >> apps/api/deploy/app.env
-          printf 'DATAGSM_CLIENT_SECRET=%s\n' "$DATAGSM_CLIENT_SECRET" >> apps/api/deploy/app.env
+        run: printf '%s' "$DAMOA_ENV" > apps/api/deploy/app.env
 
       - name: Deploy to home server
         uses: 8G4B/GSM-SV-Deploy@v1.2.1
