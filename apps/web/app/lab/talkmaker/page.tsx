@@ -50,6 +50,11 @@ const timeOf = (iso: string) =>
     minute: "2-digit",
   });
 
+// Break a message group when the same persona pauses longer than this.
+const GROUP_GAP = 5 * 60 * 1000;
+const gapMs = (a: string, b: string) =>
+  new Date(b).getTime() - new Date(a).getTime();
+
 /** ISO(UTC) → `<input type="datetime-local">` 값(로컬 타임존 기준). */
 const toLocalInput = (iso: string) => {
   const d = new Date(iso);
@@ -188,6 +193,8 @@ export default function TalkmakerPage() {
     content: string;
     at: string;
   } | null>(null);
+  const [capture, setCapture] = useState(false);
+  const [personaModal, setPersonaModal] = useState(false);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -249,11 +256,17 @@ export default function TalkmakerPage() {
   };
   const setPersonaAvatar = async (p: Persona, file: File) => {
     const { key } = await uploadAttachment(file);
+    await editPersona(p, { avatarUrl: fileUrl(key) });
+  };
+  const editPersona = async (
+    p: Persona,
+    patch: Partial<Pick<Persona, "name" | "color" | "avatarUrl" | "bio">>,
+  ) => {
     const updated = await updatePersona(p.id, {
-      name: p.name,
-      color: p.color,
-      avatarUrl: fileUrl(key),
-      bio: p.bio,
+      name: patch.name ?? p.name,
+      color: patch.color ?? p.color,
+      avatarUrl: patch.avatarUrl !== undefined ? patch.avatarUrl : p.avatarUrl,
+      bio: patch.bio !== undefined ? patch.bio : p.bio,
     });
     setPersonas((cur) => cur.map((x) => (x.id === updated.id ? updated : x)));
   };
@@ -451,6 +464,7 @@ export default function TalkmakerPage() {
           onAdd={addPersona}
           onDelete={removePersona}
           onAvatar={setPersonaAvatar}
+          onManage={() => setPersonaModal(true)}
         />
 
         {/* 채팅방 */}
@@ -516,26 +530,43 @@ export default function TalkmakerPage() {
         <section className="relative flex flex-1 flex-col">
           <header className="flex items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-4 md:px-6">
             <div className="flex min-w-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setRoom(null)}
-                aria-label="목록으로"
-                className="shrink-0 font-mono text-base text-[var(--muted)] hover:text-[var(--fg)] md:hidden"
-              >
-                ←
-              </button>
+              {!capture && (
+                <button
+                  type="button"
+                  onClick={() => setRoom(null)}
+                  aria-label="목록으로"
+                  className="shrink-0 font-mono text-base text-[var(--muted)] hover:text-[var(--fg)] md:hidden"
+                >
+                  ←
+                </button>
+              )}
               <div className="truncate font-display text-xl">{room.title}</div>
             </div>
-            <button
-              type="button"
-              onClick={() => setSettingsOpen((v) => !v)}
-              className="font-mono text-[10px] tracking-[0.25em] text-[var(--muted)] hover:text-[var(--fg)]"
-            >
-              참여자 · 설정
-            </button>
+            <div className="flex shrink-0 items-center gap-3 font-mono text-[10px] tracking-[0.25em] text-[var(--muted)]">
+              <button
+                type="button"
+                onClick={() => {
+                  setCapture((v) => !v);
+                  setSettingsOpen(false);
+                  setEditing(null);
+                }}
+                className={`hover:text-[var(--fg)] ${capture ? "text-[var(--accent)]" : ""}`}
+              >
+                {capture ? "✕ 캡처 종료" : "📷 캡처"}
+              </button>
+              {!capture && (
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen((v) => !v)}
+                  className="hover:text-[var(--fg)]"
+                >
+                  참여자 · 설정
+                </button>
+              )}
+            </div>
           </header>
 
-          {settingsOpen && (
+          {settingsOpen && !capture && (
             <RoomSettings
               room={room}
               personas={personas}
@@ -557,14 +588,24 @@ export default function TalkmakerPage() {
             {messages.map((m, i) => {
               const p = personaBy(m.personaId);
               const mine = m.personaId === room.selfPersonaId;
-              // Group consecutive messages from the same persona.
+              const prev = messages[i - 1];
+              const next = messages[i + 1];
+              // Group consecutive messages from the same persona within GROUP_GAP.
               const grouped =
-                i > 0 && messages[i - 1].personaId === m.personaId;
+                !!prev &&
+                prev.personaId === m.personaId &&
+                gapMs(prev.sentAt, m.sentAt) < GROUP_GAP;
+              const sameAsNext =
+                !!next &&
+                next.personaId === m.personaId &&
+                gapMs(m.sentAt, next.sentAt) < GROUP_GAP;
+              // Show the timestamp only on the last bubble of a group.
+              const showTime = !sameAsNext;
               const url = m.content ? firstUrl(m.content) : null;
               return (
                 <div
                   key={m.id}
-                  className={`group flex items-start gap-2 ${grouped ? "mt-0.5" : "mt-4"} ${mine ? "flex-row-reverse" : ""}`}
+                  className={`group relative flex items-start gap-2 ${grouped ? "mt-0.5" : "mt-4"} ${mine ? "flex-row-reverse" : ""}`}
                 >
                   {!mine &&
                     (grouped ? (
@@ -573,7 +614,7 @@ export default function TalkmakerPage() {
                       <Avatar persona={p} size={28} />
                     ))}
                   <div
-                    className={`max-w-[68%] ${mine ? "items-end text-right" : ""} flex flex-col`}
+                    className={`flex max-w-[68%] flex-col ${mine ? "items-end text-right" : "items-start"}`}
                   >
                     {!mine && !grouped && (
                       <span className="mb-1 font-mono text-[10px] text-[var(--muted)]">
@@ -658,23 +699,39 @@ export default function TalkmakerPage() {
                           </div>
                         )}
                         {url && <LinkPreview url={url} />}
-                        <span className="mt-1 flex items-center gap-2 font-mono text-[9px] text-[var(--muted)]">
-                          {timeOf(m.sentAt)}
-                          <button
-                            type="button"
-                            onClick={() => startEdit(m)}
-                            className="hidden hover:text-[var(--fg)] group-hover:inline"
+                        {(showTime || !capture) && (
+                          <span
+                            className={`mt-1 font-mono text-[9px] text-[var(--muted)] transition-opacity ${
+                              showTime
+                                ? ""
+                                : "opacity-0 group-hover:opacity-100"
+                            }`}
                           >
-                            수정
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeMessage(m.id)}
-                            className="hidden hover:text-[#ff5e3a] group-hover:inline"
+                            {timeOf(m.sentAt)}
+                          </span>
+                        )}
+                        {!capture && (
+                          <span
+                            className={`absolute top-0 flex gap-2 font-mono text-[9px] text-[var(--muted)] opacity-0 transition-opacity group-hover:opacity-100 ${
+                              mine ? "left-0" : "right-0"
+                            }`}
                           >
-                            삭제
-                          </button>
-                        </span>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(m)}
+                              className="hover:text-[var(--fg)]"
+                            >
+                              수정
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeMessage(m.id)}
+                              className="hover:text-[#ff5e3a]"
+                            >
+                              삭제
+                            </button>
+                          </span>
+                        )}
                       </>
                     )}
                   </div>
@@ -683,112 +740,128 @@ export default function TalkmakerPage() {
             })}
           </div>
 
-          {/* 작성 */}
-          <div className="border-t border-[var(--line)] px-4 py-4 md:px-6">
-            <div className="mb-3 flex flex-wrap gap-2">
-              {room.participantPersonaIds.length === 0 && (
-                <span className="font-mono text-[10px] text-[var(--muted)]">
-                  '참여자 · 설정'에서 페르소나를 추가하세요
-                </span>
-              )}
-              {room.participantPersonaIds.map((pid) => {
-                const p = personaBy(pid);
-                const active = sender === pid;
-                return (
-                  <button
-                    key={pid}
-                    type="button"
-                    onClick={() => setSender(pid)}
-                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors ${
-                      active
-                        ? "border-transparent text-black"
-                        : "border-[var(--line)] text-[var(--muted)]"
-                    }`}
-                    style={active ? { background: p?.color } : undefined}
-                  >
-                    <Avatar persona={p} size={16} />
-                    {p?.name}
-                    {pid === room.selfPersonaId && (
-                      <span className="opacity-60">(나)</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            {pending && (
-              <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1.5">
-                {pending.type.startsWith("video/") ? (
-                  // biome-ignore lint/a11y/useMediaCaption: preview of staged clip
-                  <video
-                    src={pending.url}
-                    className="h-12 w-12 rounded-lg object-cover"
-                  />
-                ) : (
-                  <img
-                    src={pending.url}
-                    alt=""
-                    className="h-12 w-12 rounded-lg object-cover"
-                  />
+          {/* 작성 — 캡처 모드에선 숨김 */}
+          {!capture && (
+            <div className="border-t border-[var(--line)] px-4 py-4 md:px-6">
+              <div className="mb-3 flex flex-wrap gap-2">
+                {room.participantPersonaIds.length === 0 && (
+                  <span className="font-mono text-[10px] text-[var(--muted)]">
+                    '참여자 · 설정'에서 페르소나를 추가하세요
+                  </span>
                 )}
-                <span className="font-mono text-[10px] text-[var(--muted)]">
-                  첨부됨
-                </span>
+                {room.participantPersonaIds.map((pid) => {
+                  const p = personaBy(pid);
+                  const active = sender === pid;
+                  return (
+                    <button
+                      key={pid}
+                      type="button"
+                      onClick={() => setSender(pid)}
+                      className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors ${
+                        active
+                          ? "border-transparent text-black"
+                          : "border-[var(--line)] text-[var(--muted)]"
+                      }`}
+                      style={active ? { background: p?.color } : undefined}
+                    >
+                      <Avatar persona={p} size={16} />
+                      {p?.name}
+                      {pid === room.selfPersonaId && (
+                        <span className="opacity-60">(나)</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {pending && (
+                <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1.5">
+                  {pending.type.startsWith("video/") ? (
+                    // biome-ignore lint/a11y/useMediaCaption: preview of staged clip
+                    <video
+                      src={pending.url}
+                      className="h-12 w-12 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <img
+                      src={pending.url}
+                      alt=""
+                      className="h-12 w-12 rounded-lg object-cover"
+                    />
+                  )}
+                  <span className="font-mono text-[10px] text-[var(--muted)]">
+                    첨부됨
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      URL.revokeObjectURL(pending.url);
+                      setPending(null);
+                    }}
+                    className="px-1.5 font-mono text-[12px] text-[var(--muted)] hover:text-[#ff5e3a]"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              <div className="flex items-end gap-2">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  hidden
+                  onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+                />
                 <button
                   type="button"
-                  onClick={() => {
-                    URL.revokeObjectURL(pending.url);
-                    setPending(null);
-                  }}
-                  className="px-1.5 font-mono text-[12px] text-[var(--muted)] hover:text-[#ff5e3a]"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={sender == null || busy}
+                  title="사진·동영상 첨부"
+                  className="rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2.5 text-sm text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30"
                 >
-                  ✕
+                  {uploading ? "…" : "+"}
+                </button>
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                  rows={1}
+                  placeholder={
+                    sender != null
+                      ? "메시지 보내기"
+                      : "보낸 사람을 먼저 고르세요"
+                  }
+                  disabled={sender == null || busy}
+                  className="max-h-32 flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={send}
+                  disabled={
+                    sender == null || busy || (!draft.trim() && !pending)
+                  }
+                  className="rounded-xl bg-[var(--fg)] px-4 py-2.5 font-mono text-xs text-[var(--bg)] transition-opacity disabled:opacity-30"
+                >
+                  {sending ? "전송 중…" : "전송"}
                 </button>
               </div>
-            )}
-            <div className="flex items-end gap-2">
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*,video/*"
-                hidden
-                onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-              />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={sender == null || busy}
-                title="사진·동영상 첨부"
-                className="rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2.5 text-sm text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30"
-              >
-                {uploading ? "…" : "+"}
-              </button>
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-                rows={1}
-                placeholder={
-                  sender != null ? "메시지 보내기" : "보낸 사람을 먼저 고르세요"
-                }
-                disabled={sender == null || busy}
-                className="max-h-32 flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50"
-              />
-              <button
-                type="button"
-                onClick={send}
-                disabled={sender == null || busy || (!draft.trim() && !pending)}
-                className="rounded-xl bg-[var(--fg)] px-4 py-2.5 font-mono text-xs text-[var(--bg)] transition-opacity disabled:opacity-30"
-              >
-                {sending ? "전송 중…" : "전송"}
-              </button>
             </div>
-          </div>
+          )}
         </section>
+      )}
+      {personaModal && (
+        <PersonaModal
+          personas={personas}
+          onAdd={addPersona}
+          onDelete={removePersona}
+          onAvatar={setPersonaAvatar}
+          onEdit={editPersona}
+          onClose={() => setPersonaModal(false)}
+        />
       )}
     </main>
   );
@@ -799,11 +872,13 @@ function PersonaManager({
   onAdd,
   onDelete,
   onAvatar,
+  onManage,
 }: {
   personas: Persona[];
   onAdd: (name: string) => void;
   onDelete: (id: number) => void;
   onAvatar: (p: Persona, file: File) => Promise<void>;
+  onManage: () => void;
 }) {
   const [name, setName] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -830,8 +905,17 @@ function PersonaManager({
 
   return (
     <div className="border-b border-[var(--line)] px-4 pb-3 pt-1">
-      <div className="pb-2 font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
-        PERSONAS
+      <div className="flex items-center justify-between pb-2">
+        <span className="font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
+          PERSONAS
+        </span>
+        <button
+          type="button"
+          onClick={onManage}
+          className="font-mono text-[10px] text-[var(--muted)] hover:text-[var(--fg)]"
+        >
+          관리
+        </button>
       </div>
       <input
         ref={avatarInput}
@@ -906,6 +990,12 @@ function RoomSettings({
   onPatch: (patch: Partial<Room>) => void;
   onClose: () => void;
 }) {
+  const [title, setTitle] = useState(room.title);
+  const saveTitle = () => {
+    const t = title.trim();
+    if (t && t !== room.title) onPatch({ title: t });
+    else setTitle(room.title);
+  };
   const toggle = (id: number) => {
     const set = new Set(room.participantPersonaIds);
     if (set.has(id)) set.delete(id);
@@ -920,9 +1010,9 @@ function RoomSettings({
   };
   return (
     <div className="absolute right-3 top-16 z-20 w-[calc(100%-1.5rem)] max-w-72 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-4 shadow-2xl md:right-6">
-      <div className="flex items-center justify-between pb-2">
+      <div className="flex items-center justify-between pb-1">
         <span className="font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
-          참여자
+          제목
         </span>
         <button
           type="button"
@@ -931,6 +1021,19 @@ function RoomSettings({
         >
           ✕
         </button>
+      </div>
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onBlur={saveTitle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        placeholder="채팅방 제목"
+        className="mb-3 w-full rounded-md border border-[var(--line)] bg-transparent px-2 py-1.5 text-[13px] outline-none focus:border-[var(--muted)]"
+      />
+      <div className="pb-2 font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
+        참여자
       </div>
       {personas.length === 0 && (
         <p className="font-mono text-[11px] text-[var(--muted)]">
@@ -978,6 +1081,172 @@ function RoomSettings({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function PersonaModal({
+  personas,
+  onAdd,
+  onDelete,
+  onAvatar,
+  onEdit,
+  onClose,
+}: {
+  personas: Persona[];
+  onAdd: (name: string) => void;
+  onDelete: (id: number) => void;
+  onAvatar: (p: Persona, file: File) => Promise<void>;
+  onEdit: (
+    p: Persona,
+    patch: Partial<Pick<Persona, "name" | "color" | "avatarUrl" | "bio">>,
+  ) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const targetRef = useRef<Persona | null>(null);
+
+  const pickAvatar = (p: Persona) => {
+    targetRef.current = p;
+    avatarInput.current?.click();
+  };
+  const onAvatarChange = async (file: File | null) => {
+    const p = targetRef.current;
+    if (!file || !p) return;
+    setBusyId(p.id);
+    try {
+      await onAvatar(p, file);
+    } catch {
+      alert("프로필 사진 변경에 실패했어요.");
+    } finally {
+      setBusyId(null);
+      if (avatarInput.current) avatarInput.current.value = "";
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+      onClick={onClose}
+      // biome-ignore lint/a11y/noStaticElementInteractions: backdrop click to close
+      role="presentation"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
+        role="presentation"
+        className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl border border-[var(--line)] bg-[var(--bg-2)] shadow-2xl"
+      >
+        <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-4">
+          <span className="font-display text-lg">페르소나 관리</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="font-mono text-sm text-[var(--muted)] hover:text-[var(--fg)]"
+          >
+            ✕
+          </button>
+        </div>
+        <input
+          ref={avatarInput}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => onAvatarChange(e.target.files?.[0] ?? null)}
+        />
+        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+          {personas.length === 0 && (
+            <p className="font-mono text-[12px] text-[var(--muted)]">
+              아직 페르소나가 없어요. 아래에서 추가하세요.
+            </p>
+          )}
+          {personas.map((p) => (
+            <div
+              key={p.id}
+              className="flex items-start gap-3 rounded-xl border border-[var(--line)] p-3"
+            >
+              <button
+                type="button"
+                onClick={() => pickAvatar(p)}
+                title="프로필 사진 변경"
+                className="relative shrink-0 rounded-full transition-opacity hover:opacity-80"
+              >
+                <Avatar persona={p} size={44} />
+                <span className="absolute -bottom-1 -right-1 grid h-4 w-4 place-items-center rounded-full bg-[var(--fg)] text-[8px] text-[var(--bg)]">
+                  ✎
+                </span>
+                {busyId === p.id && (
+                  <span className="absolute inset-0 grid place-items-center rounded-full bg-black/50 text-[9px] text-white">
+                    …
+                  </span>
+                )}
+              </button>
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    defaultValue={p.color}
+                    onChange={(e) => onEdit(p, { color: e.target.value })}
+                    title="색상"
+                    className="h-7 w-7 shrink-0 cursor-pointer rounded border border-[var(--line)] bg-transparent"
+                  />
+                  <input
+                    defaultValue={p.name}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      if (v && v !== p.name) onEdit(p, { name: v });
+                    }}
+                    placeholder="이름"
+                    className="min-w-0 flex-1 rounded-md border border-[var(--line)] bg-transparent px-2 py-1 text-[13px] outline-none focus:border-[var(--muted)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`'${p.name}' 삭제?`)) onDelete(p.id);
+                    }}
+                    className="shrink-0 font-mono text-[11px] text-[var(--muted)] hover:text-[#ff5e3a]"
+                  >
+                    삭제
+                  </button>
+                </div>
+                <input
+                  defaultValue={p.bio ?? ""}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v !== (p.bio ?? "")) onEdit(p, { bio: v || null });
+                  }}
+                  placeholder="한 줄 소개 (선택)"
+                  className="w-full rounded-md border border-[var(--line)] bg-transparent px-2 py-1 text-[12px] text-[var(--muted)] outline-none focus:border-[var(--muted)]"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!name.trim()) return;
+            onAdd(name);
+            setName("");
+          }}
+          className="flex gap-2 border-t border-[var(--line)] px-5 py-4"
+        >
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="새 페르소나 이름"
+            className="flex-1 rounded-md border border-[var(--line)] bg-transparent px-3 py-2 text-[13px] outline-none focus:border-[var(--muted)]"
+          />
+          <button
+            type="submit"
+            className="rounded-md bg-[var(--fg)] px-4 font-mono text-xs text-[var(--bg)]"
+          >
+            추가
+          </button>
+        </form>
       </div>
     </div>
   );
