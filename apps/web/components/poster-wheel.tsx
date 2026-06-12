@@ -20,7 +20,7 @@ const SIND = Math.sin(DIAG);
 // 화면상 고리의 가장 높은 지점의 각도 = 선택(featured)이 놓이는 위치(우상단)
 const PHI = Math.atan2(SIND, Math.cos(TILT) * COSD);
 const X_OFFSET = -0.5; // 좌우 미세 위치
-const Y_OFFSET = -2.1; // 높은 곳의 액티브가 잘리지 않게 내림
+const Y_OFFSET = -2.5; // 선택 포스터를 기준 수평선 높이에 맞춤
 const MAX_VEL = 0.22;
 
 function PosterCard({
@@ -49,7 +49,7 @@ function PosterCard({
     // 고리 최고점(PHI)에 가까울수록 f=1 (= 선택)
     const d = Math.atan2(Math.sin(ang - PHI), Math.cos(ang - PHI));
     const f = (Math.cos(d) + 1) / 2;
-    g.scale.setScalar(0.22 + f * 0.95);
+    g.scale.setScalar(0.24 + f * 1.16); // 액티브 더 크게(가깝게)
     g.renderOrder = Math.round(f * 30);
     if (glow.current) {
       glow.current.emissiveIntensity = f * 1.7;
