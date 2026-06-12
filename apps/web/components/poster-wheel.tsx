@@ -15,7 +15,8 @@ import { LABS, type Lab } from "@/lib/labs";
 const R = 4.7; // 고리 반지름
 const TILT = 1.06; // 기울기(rad)
 const DIAG = 0.55; // 대각선 회전(좌우 반전) — 가까운쪽 좌상단 / 먼쪽 우하단
-const Y_OFFSET = -1.4; // 액티브(가까운쪽)가 위로 잘리지 않게 휠 전체를 내림
+const X_OFFSET = 2.5; // 고리를 오른쪽으로 이동 — 액티브가 오른쪽 빈 공간에 오게
+const Y_OFFSET = -1.5; // 액티브가 위로 잘리지 않게 휠 전체를 내림
 const COSD = Math.cos(DIAG);
 const SIND = Math.sin(DIAG);
 const MAX_VEL = 0.22;
@@ -44,7 +45,7 @@ function PosterCard({
     const cz = Math.cos(ang) * R * Math.sin(TILT);
     g.position.set(cx * COSD - cy * SIND, cx * SIND + cy * COSD, cz);
     const f = (Math.cos(ang) + 1) / 2; // 1 = 정면(가까움)
-    g.scale.setScalar(0.22 + f * 1.18); // 먼쪽은 아주 작게
+    g.scale.setScalar(0.22 + f * 0.95); // 액티브를 덜 가깝게(작게), 먼쪽은 아주 작게
     g.renderOrder = Math.round(f * 30);
     if (glow.current) {
       glow.current.emissiveIntensity = f * 1.7;
@@ -182,7 +183,7 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
   });
 
   return (
-    <group position={[0, Y_OFFSET, 0]}>
+    <group position={[X_OFFSET, Y_OFFSET, 0]}>
       {LABS.map((lab, i) => (
         <PosterCard
           key={lab.slug}
