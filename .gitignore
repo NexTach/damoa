@@ -34,7 +34,11 @@ bin/
 !**/src/test/**/bin/
 
 ### IntelliJ IDEA ###
-.idea
+# .idea 전체는 무시하되, 공유할 실행구성만 추적
+.idea/*
+!.idea/runConfigurations/
+.idea/runConfigurations/*
+!.idea/runConfigurations/*.xml
 *.iws
 *.iml
 *.ipr
