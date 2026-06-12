@@ -48,6 +48,16 @@ export const LABS: Lab[] = [
     color: "#b06bff",
     ready: true,
   },
+  {
+    slug: "talkmaker",
+    index: "05",
+    title: "Talkmaker",
+    tag: "DataGSM OAuth · Chat Maker",
+    blurb:
+      "DataGSM 로그인 후 페르소나로 가짜 대화를 연출하는 메이커. 계정마다 따로 보관.",
+    color: "#27e8a7",
+    ready: true,
+  },
 ];
 
 export function getLab(slug: string): Lab | undefined {

@@ -4,26 +4,22 @@ load("@npm//apps/web:next/package_json.bzl", next_bin = "bin")
 
 package(default_visibility = ["//visibility:public"])
 
-# pnpm 으로 설치된 node_modules 를 Bazel 에 링크
 npm_link_all_packages(name = "node_modules")
 
-# next build 의 공통 입력
 _NEXT_SRCS = [
     ":node_modules",
     ":web_sources",
 ]
 
-# Bazel 네이티브 프로덕션 빌드: `bazel build //apps/web:build` → apps/web/.next 산출
 next_bin.next(
     name = "build",
     srcs = _NEXT_SRCS,
     args = ["build"],
     chdir = package_name(),
-    out_dirs = [".next"],
     env = {"NEXT_TELEMETRY_DISABLED": "1"},
+    out_dirs = [".next"],
 )
 
-# 개발 서버: `bazel run //apps/web:dev`
 js_run_devserver(
     name = "dev",
     args = ["dev"],
@@ -32,7 +28,6 @@ js_run_devserver(
     tool = ":node_modules/next/dir",
 )
 
-# 소스 파일 (next build/dev 의 입력)
 js_library(
     name = "web_sources",
     srcs = glob(
@@ -48,5 +43,4 @@ js_library(
     ),
 )
 
-# package.json 을 toolchain(ts_version_from) 등에서 참조할 수 있게 노출
 exports_files(["package.json"])

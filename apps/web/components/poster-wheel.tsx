@@ -139,8 +139,7 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
       e.preventDefault();
       const unit =
         e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
-      const raw =
-        Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      const raw = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
       vel.current += raw * unit * 0.00012;
       vel.current = Math.max(-MAX_VEL, Math.min(MAX_VEL, vel.current));
     };

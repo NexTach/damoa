@@ -4,15 +4,57 @@ import Link from "next/link";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 
-type Panel = { id: string; title: string; sub: string; from: string; to: string };
+type Panel = {
+  id: string;
+  title: string;
+  sub: string;
+  from: string;
+  to: string;
+};
 
 const PANELS: Panel[] = [
-  { id: "aurora", title: "Aurora", sub: "GRADIENT FIELD", from: "#ff5e3a", to: "#ffb443" },
-  { id: "cobalt", title: "Cobalt", sub: "DEEP CURRENT", from: "#3a86ff", to: "#6f5bff" },
-  { id: "lime", title: "Lime", sub: "ACID BLOOM", from: "#d8ff2e", to: "#46d39a" },
-  { id: "magenta", title: "Magenta", sub: "NEON DUSK", from: "#ff3ea5", to: "#b06bff" },
-  { id: "ember", title: "Ember", sub: "SLOW BURN", from: "#ff7a18", to: "#ff2d55" },
-  { id: "mint", title: "Mint", sub: "COOL VAPOR", from: "#27e8a7", to: "#3a86ff" },
+  {
+    id: "aurora",
+    title: "Aurora",
+    sub: "GRADIENT FIELD",
+    from: "#ff5e3a",
+    to: "#ffb443",
+  },
+  {
+    id: "cobalt",
+    title: "Cobalt",
+    sub: "DEEP CURRENT",
+    from: "#3a86ff",
+    to: "#6f5bff",
+  },
+  {
+    id: "lime",
+    title: "Lime",
+    sub: "ACID BLOOM",
+    from: "#d8ff2e",
+    to: "#46d39a",
+  },
+  {
+    id: "magenta",
+    title: "Magenta",
+    sub: "NEON DUSK",
+    from: "#ff3ea5",
+    to: "#b06bff",
+  },
+  {
+    id: "ember",
+    title: "Ember",
+    sub: "SLOW BURN",
+    from: "#ff7a18",
+    to: "#ff2d55",
+  },
+  {
+    id: "mint",
+    title: "Mint",
+    sub: "COOL VAPOR",
+    from: "#27e8a7",
+    to: "#3a86ff",
+  },
 ];
 
 // View Transitions API — React setState 를 flushSync 로 동기 커밋해야 스냅샷이 맞다.
@@ -53,8 +95,9 @@ export default function TransitionsPage() {
           View Transitions
         </h1>
         <p className="mt-4 max-w-md font-mono text-[13px] leading-relaxed text-[var(--muted)]">
-          타일을 누르면 색 패널이 상세로 <b className="text-[var(--fg)]">모핑</b>합니다.
-          브라우저의 View Transitions API — 상태 전환에 공유 요소 애니메이션.
+          타일을 누르면 색 패널이 상세로{" "}
+          <b className="text-[var(--fg)]">모핑</b>합니다. 브라우저의 View
+          Transitions API — 상태 전환에 공유 요소 애니메이션.
         </p>
 
         {!open && (
