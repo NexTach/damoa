@@ -9,10 +9,10 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.time.Duration
 import java.util.Base64
-import org.springframework.data.redis.core.StringRedisTemplate
+import java.util.concurrent.ConcurrentHashMap
 import org.springframework.http.HttpStatus
+import org.springframework.stereotype.Component
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -37,6 +37,26 @@ private fun s256(verifier: String): String {
 
 private fun enc(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)
 
+/** OAuth state→code_verifier 임시 저장 (단일 인스턴스 인메모리, TTL 10분) */
+@Component
+class OAuthStateStore {
+    private data class Pending(val verifier: String, val expiresAt: Long)
+
+    private val store = ConcurrentHashMap<String, Pending>()
+    private val ttlMillis = 10L * 60 * 1000
+
+    fun put(state: String, verifier: String) {
+        val now = System.currentTimeMillis()
+        store.entries.removeIf { it.value.expiresAt < now }
+        store[state] = Pending(verifier, now + ttlMillis)
+    }
+
+    fun consume(state: String): String? {
+        val pending = store.remove(state) ?: return null
+        return if (pending.expiresAt < System.currentTimeMillis()) null else pending.verifier
+    }
+}
+
 @RestController
 @RequestMapping("/api/auth")
 class AuthController(private val userService: UserService) {
@@ -54,14 +74,14 @@ class DataGsmOAuthController(
     private val jwtService: JwtService,
     private val userService: UserService,
     private val props: AppProperties,
-    private val redis: StringRedisTemplate,
+    private val stateStore: OAuthStateStore,
 ) {
     /** DataGSM authorize 로 리다이렉트 (state + PKCE 생성) */
     @GetMapping("/start")
     fun start(response: HttpServletResponse) {
         val state = randomToken(24)
         val verifier = randomToken(48)
-        redis.opsForValue().set("oauth:state:$state", verifier, Duration.ofMinutes(10))
+        stateStore.put(state, verifier)
 
         val d = props.datagsm
         val url = buildString {
@@ -84,7 +104,7 @@ class DataGsmOAuthController(
         @RequestParam state: String,
         response: HttpServletResponse,
     ) {
-        val verifier = redis.opsForValue().getAndDelete("oauth:state:$state")
+        val verifier = stateStore.consume(state)
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 state")
         val accessToken = client.exchangeToken(code, verifier)
         val info = client.userInfo(accessToken)
