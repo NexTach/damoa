@@ -2,8 +2,13 @@
 set -euo pipefail
 export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH
 
-# 시크릿(.env)은 레포/소스에 두지 않고 서버에 한 번만 생성해 둔 파일을 사용한다.
-ENV_FILE="${DAMOA_ENV_FILE:-/Users/snowykte0426/deploy/secrets/damoa.env}"
+# 시크릿: CD 가 GitHub Secret(DAMOA_ENV)으로부터 함께 배포한 app.env 를 사용한다.
+# (구버전 호환: 그게 없으면 서버에 수동 생성해 둔 파일로 폴백)
+DEPLOY_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ENV_FILE="$DEPLOY_DIR/app.env"
+if [ ! -f "$ENV_FILE" ]; then
+  ENV_FILE="${DAMOA_ENV_FILE:-/Users/snowykte0426/deploy/secrets/damoa.env}"
+fi
 if [ ! -f "$ENV_FILE" ]; then
   echo "[application_start] ERROR: env file not found: $ENV_FILE" >&2
   exit 1

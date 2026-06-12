@@ -14,8 +14,9 @@ apps/web/out/
 apps/web/next-env.d.ts
 *.tsbuildinfo
 
-### Deploy (CI 가 빌드해 주입하는 산출물) ###
+### Deploy (CI 가 빌드/주입하는 산출물 — 절대 커밋 금지) ###
 apps/api/deploy/app.jar
+apps/api/deploy/app.env
 
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
@@ -34,7 +35,6 @@ bin/
 !**/src/test/**/bin/
 
 ### IntelliJ IDEA ###
-# .idea 전체는 무시하되, 공유할 실행구성만 추적
 .idea/*
 !.idea/runConfigurations/
 .idea/runConfigurations/*
