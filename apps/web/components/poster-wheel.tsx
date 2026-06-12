@@ -14,7 +14,8 @@ import { LABS, type Lab } from "@/lib/labs";
 // 토성 고리 — 길고 극단적인 / 대각선. 먼쪽은 멀어져 안개로 사라진다.
 const R = 4.7; // 고리 반지름
 const TILT = 1.06; // 기울기(rad)
-const DIAG = -0.55; // 대각선 회전 — 가까운쪽 우상단 / 먼쪽 좌하단
+const DIAG = 0.55; // 대각선 회전(좌우 반전) — 가까운쪽 좌상단 / 먼쪽 우하단
+const Y_OFFSET = -1.4; // 액티브(가까운쪽)가 위로 잘리지 않게 휠 전체를 내림
 const COSD = Math.cos(DIAG);
 const SIND = Math.sin(DIAG);
 const MAX_VEL = 0.22;
@@ -181,7 +182,7 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
   });
 
   return (
-    <>
+    <group position={[0, Y_OFFSET, 0]}>
       {LABS.map((lab, i) => (
         <PosterCard
           key={lab.slug}
@@ -191,7 +192,7 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
           offsetRef={offset}
         />
       ))}
-    </>
+    </group>
   );
 }
 
