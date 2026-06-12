@@ -4,12 +4,10 @@ load("//bazel:spring_boot.bzl", "spring_boot_jar")
 
 package(default_visibility = ["//visibility:public"])
 
-# 메인 implementation 의존성
 _DEPS = [
     "@maven//:org_springframework_boot_spring_boot_starter",
     "@maven//:org_springframework_boot_spring_boot_starter_batch",
     "@maven//:org_springframework_boot_spring_boot_starter_data_jpa",
-    "@maven//:org_springframework_boot_spring_boot_starter_data_r2dbc",
     "@maven//:org_springframework_boot_spring_boot_starter_data_redis",
     "@maven//:org_springframework_boot_spring_boot_starter_graphql",
     "@maven//:org_springframework_boot_spring_boot_starter_security",
@@ -21,12 +19,11 @@ _DEPS = [
     "@maven//:io_projectreactor_kotlin_reactor_kotlin_extensions",
     "@maven//:org_thymeleaf_extras_thymeleaf_extras_springsecurity6",
     "@maven//:tools_jackson_module_jackson_module_kotlin",
+    "@maven//:com_nimbusds_nimbus_jose_jwt",
 ]
 
-# runtime 전용 (드라이버)
 _RUNTIME_DEPS = [
     "@maven//:com_mysql_mysql_connector_j",
-    "@maven//:io_asyncer_r2dbc_mysql",
 ]
 
 kt_jvm_library(
@@ -37,15 +34,12 @@ kt_jvm_library(
     deps = _DEPS,
 )
 
-# 로컬 개발 실행: `bazel run //apps/api:app` (개별 jar 클래스패스)
 java_binary(
     name = "app",
     main_class = "io.github.snowykte0426.damoa.DamoaApplicationKt",
     runtime_deps = [":lib"],
 )
 
-# 배포용 Spring Boot 실행 jar (의존성 BOOT-INF/lib 중첩 → 오토컨피그 정상).
-# `bazel build //apps/api:boot_jar` → bazel-bin/apps/api/boot_jar.jar
 spring_boot_jar(
     name = "boot_jar",
     app = ":lib",
@@ -59,9 +53,9 @@ kt_jvm_test(
     runtime_deps = _RUNTIME_DEPS,
     deps = _DEPS + [
         ":lib",
-        "@maven//:org_springframework_boot_spring_boot_starter_test",
         "@maven//:org_jetbrains_kotlin_kotlin_test_junit5",
         "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_test",
         "@maven//:org_junit_platform_junit_platform_launcher",
+        "@maven//:org_springframework_boot_spring_boot_starter_test",
     ],
 )

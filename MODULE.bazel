@@ -37,7 +37,6 @@ maven.install(
         "org.springframework.boot:spring-boot-starter",
         "org.springframework.boot:spring-boot-starter-batch",
         "org.springframework.boot:spring-boot-starter-data-jpa",
-        "org.springframework.boot:spring-boot-starter-data-r2dbc",
         "org.springframework.boot:spring-boot-starter-data-redis",
         "org.springframework.boot:spring-boot-starter-graphql",
         "org.springframework.boot:spring-boot-starter-security",
@@ -53,14 +52,14 @@ maven.install(
         "org.thymeleaf.extras:thymeleaf-extras-springsecurity6",
         # --- Jackson 3 (Spring Boot 4) ---
         "tools.jackson.module:jackson-module-kotlin",
+        # --- JWT (BOM 비관리 → 버전 명시) ---
+        "com.nimbusds:nimbus-jose-jwt:9.48",
         # --- DB drivers (runtime) ---
         "com.mysql:mysql-connector-j",
-        "io.asyncer:r2dbc-mysql",
         # --- test ---
         "org.springframework.boot:spring-boot-starter-test",
         "org.springframework.boot:spring-boot-starter-batch-test",
         "org.springframework.boot:spring-boot-starter-data-jpa-test",
-        "org.springframework.boot:spring-boot-starter-data-r2dbc-test",
         "org.springframework.boot:spring-boot-starter-data-redis-test",
         "org.springframework.boot:spring-boot-starter-graphql-test",
         "org.springframework.boot:spring-boot-starter-security-test",
