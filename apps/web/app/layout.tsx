@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Syne } from "next/font/google";
+import { themeBootScript } from "@/lib/theme";
 import "./globals.css";
 
 const syne = Syne({
@@ -23,7 +24,16 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ko" className={`${syne.variable} ${mono.variable}`}>
+    <html
+      lang="ko"
+      className={`${syne.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        {/* Apply persisted theme before first paint to avoid a flash. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trusted inline boot script */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       <body>
         {children}
         <div className="vignette" aria-hidden />

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   clearToken,
   createMessage,
@@ -245,7 +246,7 @@ export default function TalkmakerPage() {
           </p>
           <a
             href={loginUrl()}
-            className="mt-8 inline-flex items-center gap-3 rounded-full bg-[var(--fg)] px-6 py-3 font-mono text-xs tracking-[0.2em] text-black transition-transform hover:scale-[1.03]"
+            className="mt-8 inline-flex items-center gap-3 rounded-full bg-[var(--fg)] px-6 py-3 font-mono text-xs tracking-[0.2em] text-[var(--bg)] transition-transform hover:scale-[1.03]"
           >
             DataGSM 로그인 →
           </a>
@@ -264,8 +265,10 @@ export default function TalkmakerPage() {
 
   return (
     <main className="flex h-dvh bg-[var(--bg)] text-[var(--fg)]">
-      {/* 사이드바 */}
-      <aside className="flex w-72 shrink-0 flex-col border-r border-[var(--line)] bg-[var(--bg-2)]">
+      {/* 사이드바 — 모바일에선 방이 열리면 숨기고 채팅을 전체폭으로 */}
+      <aside
+        className={`${room ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-[var(--line)] bg-[var(--bg-2)] md:w-72`}
+      >
         <div className="flex items-center justify-between p-4">
           <div>
             <div className="font-display text-lg leading-none">Talkmaker</div>
@@ -273,13 +276,16 @@ export default function TalkmakerPage() {
               {me?.name ?? "…"}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            className="font-mono text-[9px] tracking-[0.2em] text-[var(--muted)] hover:text-[var(--fg)]"
-          >
-            LOGOUT
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={logout}
+              className="font-mono text-[9px] tracking-[0.2em] text-[var(--muted)] hover:text-[var(--fg)]"
+            >
+              LOGOUT
+            </button>
+          </div>
         </div>
 
         {/* 페르소나 */}
@@ -307,7 +313,9 @@ export default function TalkmakerPage() {
             <div
               key={r.id}
               className={`group flex w-full items-center gap-2 rounded-lg px-3 py-2 transition-colors ${
-                room?.id === r.id ? "bg-white/10" : "hover:bg-white/5"
+                room?.id === r.id
+                  ? "bg-[var(--hover-strong)]"
+                  : "hover:bg-[var(--hover)]"
               }`}
             >
               <button
@@ -343,13 +351,23 @@ export default function TalkmakerPage() {
 
       {/* 메인 */}
       {!room ? (
-        <div className="grid flex-1 place-items-center font-mono text-xs tracking-[0.3em] text-[var(--muted)]">
+        <div className="hidden flex-1 place-items-center font-mono text-xs tracking-[0.3em] text-[var(--muted)] md:grid">
           채팅방을 선택하거나 + 로 만드세요
         </div>
       ) : (
         <section className="relative flex flex-1 flex-col">
-          <header className="flex items-center justify-between border-b border-[var(--line)] px-6 py-4">
-            <div className="font-display text-xl">{room.title}</div>
+          <header className="flex items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-4 md:px-6">
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setRoom(null)}
+                aria-label="목록으로"
+                className="shrink-0 font-mono text-base text-[var(--muted)] hover:text-[var(--fg)] md:hidden"
+              >
+                ←
+              </button>
+              <div className="truncate font-display text-xl">{room.title}</div>
+            </div>
             <button
               type="button"
               onClick={() => setSettingsOpen((v) => !v)}
@@ -371,7 +389,7 @@ export default function TalkmakerPage() {
           {/* 메시지 */}
           <div
             ref={scrollRef}
-            className="flex-1 space-y-3 overflow-y-auto px-6 py-6"
+            className="flex-1 space-y-3 overflow-y-auto px-4 py-5 md:px-6 md:py-6"
           >
             {messages.length === 0 && (
               <div className="grid h-full place-items-center font-mono text-[11px] tracking-[0.2em] text-[var(--muted)]">
@@ -421,7 +439,10 @@ export default function TalkmakerPage() {
                         style={
                           mine
                             ? { background: "#27e8a7", color: "#04130d" }
-                            : { background: "#17171c", color: "var(--fg)" }
+                            : {
+                                background: "var(--surface)",
+                                color: "var(--fg)",
+                              }
                         }
                       >
                         {m.content}
@@ -444,7 +465,7 @@ export default function TalkmakerPage() {
           </div>
 
           {/* 작성 */}
-          <div className="border-t border-[var(--line)] px-6 py-4">
+          <div className="border-t border-[var(--line)] px-4 py-4 md:px-6">
             <div className="mb-3 flex flex-wrap gap-2">
               {room.participantPersonaIds.length === 0 && (
                 <span className="font-mono text-[10px] text-[var(--muted)]">
@@ -544,7 +565,7 @@ export default function TalkmakerPage() {
                 type="button"
                 onClick={send}
                 disabled={sender == null || (!draft.trim() && !pending)}
-                className="rounded-xl bg-[var(--fg)] px-4 py-2.5 font-mono text-xs text-black disabled:opacity-30"
+                className="rounded-xl bg-[var(--fg)] px-4 py-2.5 font-mono text-xs text-[var(--bg)] disabled:opacity-30"
               >
                 전송
               </button>
@@ -605,7 +626,7 @@ function PersonaManager({
         />
         <button
           type="submit"
-          className="rounded-md bg-white/10 px-2 font-mono text-xs hover:bg-white/20"
+          className="rounded-md bg-[var(--hover-strong)] px-2 font-mono text-xs hover:bg-[var(--hover)]"
         >
           +
         </button>
@@ -638,7 +659,7 @@ function RoomSettings({
     });
   };
   return (
-    <div className="absolute right-6 top-16 z-20 w-72 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-4 shadow-2xl">
+    <div className="absolute right-3 top-16 z-20 w-[calc(100%-1.5rem)] max-w-72 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-4 shadow-2xl md:right-6">
       <div className="flex items-center justify-between pb-2">
         <span className="font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
           참여자
@@ -663,7 +684,7 @@ function RoomSettings({
           return (
             <div
               key={p.id}
-              className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-white/5"
+              className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-[var(--hover)]"
             >
               <button
                 type="button"
