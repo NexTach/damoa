@@ -28,7 +28,7 @@ export const LABS: Lab[] = [
     tag: "App Router",
     blurb: "View Transitions API 로 라우트 간 요소가 모핑되는 전환.",
     color: "#ff5e3a",
-    ready: false,
+    ready: true,
   },
   {
     slug: "particles",
@@ -37,7 +37,7 @@ export const LABS: Lab[] = [
     tag: "GPU Instancing",
     blurb: "수만 개 파티클을 인스턴싱으로 그리고 포인터로 흩뜨린다.",
     color: "#48b0ff",
-    ready: false,
+    ready: true,
   },
   {
     slug: "scroll",
@@ -46,7 +46,7 @@ export const LABS: Lab[] = [
     tag: "Scroll-linked 3D",
     blurb: "스크롤에 묶인 3D 카메라 연출. 스크롤이 곧 타임라인.",
     color: "#b06bff",
-    ready: false,
+    ready: true,
   },
 ];
 

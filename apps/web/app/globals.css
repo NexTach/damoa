@@ -91,3 +91,9 @@ body {
 .rise {
   animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* View Transitions — 공유 요소 모핑을 조금 더 부드럽게 */
+::view-transition-group(*) {
+  animation-duration: 0.5s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
