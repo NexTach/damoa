@@ -23,6 +23,7 @@ import {
   type Persona,
   type Room,
   setToken,
+  updateMessage,
   updateRoom,
   uploadAttachment,
 } from "@/lib/talkmaker";
@@ -38,10 +39,19 @@ const PALETTE = [
 ];
 const initial = (s: string) => (s.trim()[0] ?? "?").toUpperCase();
 const timeOf = (iso: string) =>
-  new Date(iso).toLocaleTimeString("ko-KR", {
+  new Date(iso).toLocaleString("ko-KR", {
+    month: "numeric",
+    day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+
+/** ISO(UTC) → `<input type="datetime-local">` 값(로컬 타임존 기준). */
+const toLocalInput = (iso: string) => {
+  const d = new Date(iso);
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+};
 
 function Avatar({ persona, size = 32 }: { persona?: Persona; size?: number }) {
   const color = persona?.color ?? "#555";
@@ -76,6 +86,12 @@ export default function TalkmakerPage() {
     url: string;
   } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [editing, setEditing] = useState<{
+    id: number;
+    personaId: number;
+    content: string;
+    at: string;
+  } | null>(null);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -209,6 +225,30 @@ export default function TalkmakerPage() {
     if (!room) return;
     await deleteMessage(room.id, id);
     setMessages((cur) => cur.filter((m) => m.id !== id));
+  };
+
+  const startEdit = (m: Message) =>
+    setEditing({
+      id: m.id,
+      personaId: m.personaId,
+      content: m.content,
+      at: toLocalInput(m.sentAt),
+    });
+
+  const saveEdit = async () => {
+    if (!room || !editing) return;
+    const msg = await updateMessage(room.id, editing.id, {
+      personaId: editing.personaId,
+      content: editing.content,
+      sentAt: new Date(editing.at).toISOString(),
+    });
+    setMessages((cur) =>
+      cur
+        .map((m) => (m.id === msg.id ? msg : m))
+        .sort((a, b) => a.sentAt.localeCompare(b.sentAt) || a.id - b.id),
+    );
+    setEditing(null);
+    refreshRooms();
   };
 
   const logout = () => {
@@ -402,7 +442,7 @@ export default function TalkmakerPage() {
               return (
                 <div
                   key={m.id}
-                  className={`group flex items-end gap-2 ${mine ? "flex-row-reverse" : ""}`}
+                  className={`group flex items-start gap-2 ${mine ? "flex-row-reverse" : ""}`}
                 >
                   {!mine && <Avatar persona={p} size={28} />}
                   <div
@@ -433,31 +473,80 @@ export default function TalkmakerPage() {
                           className="mb-1 max-h-72 max-w-full rounded-2xl object-cover"
                         />
                       ))}
-                    {m.content && (
-                      <div
-                        className="whitespace-pre-wrap break-words rounded-2xl px-4 py-2 text-[14px] leading-relaxed"
-                        style={
-                          mine
-                            ? { background: "#27e8a7", color: "#04130d" }
-                            : {
-                                background: "var(--surface)",
-                                color: "var(--fg)",
-                              }
-                        }
-                      >
-                        {m.content}
+                    {editing?.id === m.id ? (
+                      <div className="flex w-64 max-w-full flex-col gap-2 rounded-2xl border border-[var(--line)] bg-[var(--bg-2)] p-2 text-left">
+                        <textarea
+                          value={editing.content}
+                          onChange={(e) =>
+                            setEditing(
+                              (s) => s && { ...s, content: e.target.value },
+                            )
+                          }
+                          rows={2}
+                          placeholder="내용"
+                          className="resize-none rounded-lg border border-[var(--line)] bg-transparent px-2 py-1 text-[13px] outline-none placeholder:text-[var(--muted)]"
+                        />
+                        <input
+                          type="datetime-local"
+                          value={editing.at}
+                          onChange={(e) =>
+                            setEditing((s) => s && { ...s, at: e.target.value })
+                          }
+                          className="rounded-lg border border-[var(--line)] bg-transparent px-2 py-1 font-mono text-[11px] outline-none"
+                        />
+                        <div className="flex justify-end gap-1 font-mono text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => setEditing(null)}
+                            className="px-2 py-1 text-[var(--muted)] hover:text-[var(--fg)]"
+                          >
+                            취소
+                          </button>
+                          <button
+                            type="button"
+                            onClick={saveEdit}
+                            className="rounded-md bg-[var(--fg)] px-3 py-1 text-[var(--bg)]"
+                          >
+                            저장
+                          </button>
+                        </div>
                       </div>
+                    ) : (
+                      <>
+                        {m.content && (
+                          <div
+                            className="whitespace-pre-wrap break-words rounded-2xl px-4 py-2 text-[14px] leading-relaxed"
+                            style={
+                              mine
+                                ? { background: "#27e8a7", color: "#04130d" }
+                                : {
+                                    background: "var(--surface)",
+                                    color: "var(--fg)",
+                                  }
+                            }
+                          >
+                            {m.content}
+                          </div>
+                        )}
+                        <span className="mt-1 flex items-center gap-2 font-mono text-[9px] text-[var(--muted)]">
+                          {timeOf(m.sentAt)}
+                          <button
+                            type="button"
+                            onClick={() => startEdit(m)}
+                            className="hidden hover:text-[var(--fg)] group-hover:inline"
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeMessage(m.id)}
+                            className="hidden hover:text-[#ff5e3a] group-hover:inline"
+                          >
+                            삭제
+                          </button>
+                        </span>
+                      </>
                     )}
-                    <span className="mt-1 flex items-center gap-2 font-mono text-[9px] text-[var(--muted)]">
-                      {timeOf(m.sentAt)}
-                      <button
-                        type="button"
-                        onClick={() => removeMessage(m.id)}
-                        className="hidden hover:text-[#ff5e3a] group-hover:inline"
-                      >
-                        삭제
-                      </button>
-                    </span>
                   </div>
                 </div>
               );

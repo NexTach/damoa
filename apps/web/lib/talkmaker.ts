@@ -89,10 +89,21 @@ export const createMessage = (
     content: string;
     attachmentKey?: string;
     attachmentType?: string;
+    sentAt?: string;
   },
 ) =>
   tm<Message>(`/rooms/${roomId}/messages`, {
     method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const updateMessage = (
+  roomId: number,
+  messageId: number,
+  body: { personaId: number; content: string; sentAt?: string },
+) =>
+  tm<Message>(`/rooms/${roomId}/messages/${messageId}`, {
+    method: "PATCH",
     body: JSON.stringify(body),
   });
 
