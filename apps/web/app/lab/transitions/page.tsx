@@ -2,67 +2,27 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { flushSync } from "react-dom";
 
-type Panel = {
-  id: string;
-  title: string;
-  sub: string;
-  from: string;
-  to: string;
-};
+type Panel = { id: string; title: string; sub: string; from: string; to: string };
 
 const PANELS: Panel[] = [
-  {
-    id: "aurora",
-    title: "Aurora",
-    sub: "GRADIENT FIELD",
-    from: "#ff5e3a",
-    to: "#ffb443",
-  },
-  {
-    id: "cobalt",
-    title: "Cobalt",
-    sub: "DEEP CURRENT",
-    from: "#3a86ff",
-    to: "#6f5bff",
-  },
-  {
-    id: "lime",
-    title: "Lime",
-    sub: "ACID BLOOM",
-    from: "#d8ff2e",
-    to: "#46d39a",
-  },
-  {
-    id: "magenta",
-    title: "Magenta",
-    sub: "NEON DUSK",
-    from: "#ff3ea5",
-    to: "#b06bff",
-  },
-  {
-    id: "ember",
-    title: "Ember",
-    sub: "SLOW BURN",
-    from: "#ff7a18",
-    to: "#ff2d55",
-  },
-  {
-    id: "mint",
-    title: "Mint",
-    sub: "COOL VAPOR",
-    from: "#27e8a7",
-    to: "#3a86ff",
-  },
+  { id: "aurora", title: "Aurora", sub: "GRADIENT FIELD", from: "#ff5e3a", to: "#ffb443" },
+  { id: "cobalt", title: "Cobalt", sub: "DEEP CURRENT", from: "#3a86ff", to: "#6f5bff" },
+  { id: "lime", title: "Lime", sub: "ACID BLOOM", from: "#d8ff2e", to: "#46d39a" },
+  { id: "magenta", title: "Magenta", sub: "NEON DUSK", from: "#ff3ea5", to: "#b06bff" },
+  { id: "ember", title: "Ember", sub: "SLOW BURN", from: "#ff7a18", to: "#ff2d55" },
+  { id: "mint", title: "Mint", sub: "COOL VAPOR", from: "#27e8a7", to: "#3a86ff" },
 ];
 
-// View Transitions API — 지원 안 하는 브라우저는 즉시 전환으로 폴백
-function startVT(cb: () => void) {
+// View Transitions API — React setState 를 flushSync 로 동기 커밋해야 스냅샷이 맞다.
+// 미지원 브라우저는 즉시 전환으로 폴백.
+function startVT(update: () => void) {
   const d = document as Document & {
     startViewTransition?: (cb: () => void) => void;
   };
-  if (d.startViewTransition) d.startViewTransition(cb);
-  else cb();
+  if (d.startViewTransition) d.startViewTransition(() => flushSync(update));
+  else update();
 }
 const vt = (name: string): React.CSSProperties =>
   ({ viewTransitionName: name }) as React.CSSProperties;
@@ -90,39 +50,39 @@ export default function TransitionsPage() {
           View Transitions
         </h1>
         <p className="mt-4 max-w-md font-mono text-[13px] leading-relaxed text-[var(--muted)]">
-          타일을 누르면 같은 요소가 상세 화면으로{" "}
-          <b className="text-[var(--fg)]">모핑</b>합니다. 브라우저의 View
-          Transitions API — 라우트/상태 전환에 공유 요소 애니메이션.
+          타일을 누르면 같은 요소가 상세 화면으로 <b className="text-[var(--fg)]">모핑</b>합니다.
+          브라우저의 View Transitions API — 상태 전환에 공유 요소 애니메이션.
         </p>
 
-        <div className="mt-10 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
-          {PANELS.map((p, i) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => startVT(() => setOpenId(p.id))}
-              className="group relative aspect-[4/5] overflow-hidden rounded-2xl text-left"
-              style={{
-                // 상세가 열리면 이름을 떼서 view-transition-name 이 한 곳에만 존재하게 한다
-                // (중복되면 브라우저가 전환을 취소 → 하드 컷)
-                ...(openId === null ? vt(`tile-${p.id}`) : {}),
-                backgroundImage: `linear-gradient(150deg, ${p.from}, ${p.to})`,
-              }}
-            >
-              <span className="absolute left-4 top-3 font-display text-2xl text-black/70">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <span className="absolute bottom-3 left-4 right-4">
-                <span className="block font-display text-2xl text-black md:text-3xl">
-                  {p.title}
+        {/* 그리드: 상세가 열리면 언마운트되어 자연스럽게 퇴장 */}
+        {!open && (
+          <div className="mt-10 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+            {PANELS.map((p, i) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => startVT(() => setOpenId(p.id))}
+                className="group relative aspect-[4/5] overflow-hidden rounded-2xl text-left"
+                style={{
+                  ...vt(`tile-${p.id}`),
+                  backgroundImage: `linear-gradient(150deg, ${p.from}, ${p.to})`,
+                }}
+              >
+                <span className="absolute left-4 top-3 font-display text-2xl text-black/70">
+                  {String(i + 1).padStart(2, "0")}
                 </span>
-                <span className="font-mono text-[9px] tracking-[0.2em] text-black/60">
-                  {p.sub}
+                <span className="absolute bottom-3 left-4 right-4">
+                  <span className="block font-display text-2xl text-black md:text-3xl">
+                    {p.title}
+                  </span>
+                  <span className="font-mono text-[9px] tracking-[0.2em] text-black/60">
+                    {p.sub}
+                  </span>
                 </span>
-              </span>
-            </button>
-          ))}
-        </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 상세 — 같은 view-transition-name 으로 타일에서 모핑 */}
