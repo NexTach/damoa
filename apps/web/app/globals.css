@@ -26,6 +26,11 @@ body {
   color: var(--fg);
 }
 
+/* 스크롤바 등장/소멸로 인한 가로 레이아웃 점프 방지 (View Transitions 떨림 완화) */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: var(--type-mono), ui-monospace, "SFMono-Regular", monospace;
   -webkit-font-smoothing: antialiased;

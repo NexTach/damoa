@@ -16,7 +16,6 @@ const PANELS: Panel[] = [
 ];
 
 // View Transitions API — React setState 를 flushSync 로 동기 커밋해야 스냅샷이 맞다.
-// 미지원 브라우저는 즉시 전환으로 폴백.
 function startVT(update: () => void) {
   const d = document as Document & {
     startViewTransition?: (cb: () => void) => void;
@@ -24,6 +23,10 @@ function startVT(update: () => void) {
   if (d.startViewTransition) d.startViewTransition(() => flushSync(update));
   else update();
 }
+// 모핑은 '색'만 담당 — 텍스트가 같이 모핑되면 크로스페이드로 떨려 보이므로 분리
+const grad = (p: Panel): React.CSSProperties => ({
+  backgroundImage: `linear-gradient(150deg, ${p.from}, ${p.to})`,
+});
 const vt = (name: string): React.CSSProperties =>
   ({ viewTransitionName: name }) as React.CSSProperties;
 
@@ -50,11 +53,10 @@ export default function TransitionsPage() {
           View Transitions
         </h1>
         <p className="mt-4 max-w-md font-mono text-[13px] leading-relaxed text-[var(--muted)]">
-          타일을 누르면 같은 요소가 상세 화면으로 <b className="text-[var(--fg)]">모핑</b>합니다.
+          타일을 누르면 색 패널이 상세로 <b className="text-[var(--fg)]">모핑</b>합니다.
           브라우저의 View Transitions API — 상태 전환에 공유 요소 애니메이션.
         </p>
 
-        {/* 그리드: 상세가 열리면 언마운트되어 자연스럽게 퇴장 */}
         {!open && (
           <div className="mt-10 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
             {PANELS.map((p, i) => (
@@ -62,16 +64,17 @@ export default function TransitionsPage() {
                 key={p.id}
                 type="button"
                 onClick={() => startVT(() => setOpenId(p.id))}
-                className="group relative aspect-[4/5] overflow-hidden rounded-2xl text-left"
-                style={{
-                  ...vt(`tile-${p.id}`),
-                  backgroundImage: `linear-gradient(150deg, ${p.from}, ${p.to})`,
-                }}
+                className="relative aspect-[4/5] overflow-hidden rounded-2xl text-left"
               >
+                {/* 모핑되는 색 레이어 (텍스트 없음 → 떨림 없음) */}
+                <span
+                  className="absolute inset-0 rounded-2xl"
+                  style={{ ...vt(`tile-${p.id}`), ...grad(p) }}
+                />
                 <span className="absolute left-4 top-3 font-display text-2xl text-black/70">
                   {String(i + 1).padStart(2, "0")}
                 </span>
-                <span className="absolute bottom-3 left-4 right-4">
+                <span className="absolute bottom-3 left-4 right-4 block">
                   <span className="block font-display text-2xl text-black md:text-3xl">
                     {p.title}
                   </span>
@@ -85,23 +88,25 @@ export default function TransitionsPage() {
         )}
       </div>
 
-      {/* 상세 — 같은 view-transition-name 으로 타일에서 모핑 */}
+      {/* 상세 — 색 레이어가 타일에서 모핑, 텍스트는 별도 */}
       {open && (
         <button
           type="button"
           onClick={() => startVT(() => setOpenId(null))}
-          className="fixed inset-0 z-50 flex flex-col justify-end p-8 text-left md:p-14"
-          style={{
-            ...vt(`tile-${open.id}`),
-            backgroundImage: `linear-gradient(150deg, ${open.from}, ${open.to})`,
-          }}
+          className="fixed inset-0 z-50 block text-left"
         >
-          <div className="font-display text-7xl leading-[0.9] text-black md:text-9xl">
-            {open.title}
-          </div>
-          <div className="mt-3 font-mono text-xs tracking-[0.3em] text-black/70">
-            {open.sub} · 아무 곳이나 눌러 닫기
-          </div>
+          <span
+            className="absolute inset-0"
+            style={{ ...vt(`tile-${open.id}`), ...grad(open) }}
+          />
+          <span className="absolute inset-x-0 bottom-0 block p-8 md:p-14">
+            <span className="block font-display text-7xl leading-[0.9] text-black md:text-9xl">
+              {open.title}
+            </span>
+            <span className="mt-3 block font-mono text-xs tracking-[0.3em] text-black/70">
+              {open.sub} · 아무 곳이나 눌러 닫기
+            </span>
+          </span>
         </button>
       )}
     </main>
