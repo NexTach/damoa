@@ -28,6 +28,9 @@ export type Message = {
   id: number;
   personaId: number;
   content: string;
+  attachmentUrl: string | null;
+  attachmentType: string | null;
+  attachmentExpired: boolean;
   sentAt: string;
 };
 
@@ -81,11 +84,34 @@ export const listMessages = (roomId: number) =>
   tm<Message[]>(`/rooms/${roomId}/messages`);
 export const createMessage = (
   roomId: number,
-  body: { personaId: number; content: string },
+  body: {
+    personaId: number;
+    content: string;
+    attachmentKey?: string;
+    attachmentType?: string;
+  },
 ) =>
   tm<Message>(`/rooms/${roomId}/messages`, {
     method: "POST",
     body: JSON.stringify(body),
   });
+
+/** Uploads a file to the storage and returns its object key + mime type. */
+export const uploadAttachment = async (
+  file: File,
+): Promise<{ key: string; type: string }> => {
+  const token = getToken();
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/api/talkmaker/attachments`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (res.status === 401 || res.status === 403)
+    throw new AuthError("unauthorized");
+  if (!res.ok) throw new Error(`upload ${res.status}`);
+  return res.json();
+};
 export const deleteMessage = (roomId: number, messageId: number) =>
   tm<void>(`/rooms/${roomId}/messages/${messageId}`, { method: "DELETE" });

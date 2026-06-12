@@ -23,6 +23,7 @@ import {
   type Room,
   setToken,
   updateRoom,
+  uploadAttachment,
 } from "@/lib/talkmaker";
 
 const PALETTE = [
@@ -68,8 +69,15 @@ export default function TalkmakerPage() {
   const [sender, setSender] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pending, setPending] = useState<{
+    key: string;
+    type: string;
+    url: string;
+  } | null>(null);
+  const [uploading, setUploading] = useState(false);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const openRoom = useCallback(async (r: Room) => {
     setRoom(r);
@@ -167,14 +175,33 @@ export default function TalkmakerPage() {
       );
   };
 
+  const pickFile = async (file: File | null) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { key, type } = await uploadAttachment(file);
+      setPending({ key, type, url: URL.createObjectURL(file) });
+    } catch {
+      alert("파일 업로드에 실패했어요.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
   const send = async () => {
-    if (!room || sender == null || !draft.trim()) return;
+    if (!room || sender == null) return;
+    if (!draft.trim() && !pending) return;
     const msg = await createMessage(room.id, {
       personaId: sender,
       content: draft.trim(),
+      attachmentKey: pending?.key,
+      attachmentType: pending?.type,
     });
     setMessages((cur) => [...cur, msg]);
     setDraft("");
+    if (pending) URL.revokeObjectURL(pending.url);
+    setPending(null);
     refreshRooms();
   };
   const removeMessage = async (id: number) => {
@@ -368,16 +395,38 @@ export default function TalkmakerPage() {
                         {p?.name}
                       </span>
                     )}
-                    <div
-                      className="whitespace-pre-wrap break-words rounded-2xl px-4 py-2 text-[14px] leading-relaxed"
-                      style={
-                        mine
-                          ? { background: "#27e8a7", color: "#04130d" }
-                          : { background: "#17171c", color: "var(--fg)" }
-                      }
-                    >
-                      {m.content}
-                    </div>
+                    {m.attachmentExpired && (
+                      <div className="mb-1 flex items-center gap-2 rounded-2xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
+                        <span aria-hidden>🗑️</span> 만료된 파일입니다
+                      </div>
+                    )}
+                    {m.attachmentUrl &&
+                      (m.attachmentType?.startsWith("video/") ? (
+                        // biome-ignore lint/a11y/useMediaCaption: user-authored fake chat clip
+                        <video
+                          src={m.attachmentUrl}
+                          controls
+                          className="mb-1 max-h-72 max-w-full rounded-2xl"
+                        />
+                      ) : (
+                        <img
+                          src={m.attachmentUrl}
+                          alt=""
+                          className="mb-1 max-h-72 max-w-full rounded-2xl object-cover"
+                        />
+                      ))}
+                    {m.content && (
+                      <div
+                        className="whitespace-pre-wrap break-words rounded-2xl px-4 py-2 text-[14px] leading-relaxed"
+                        style={
+                          mine
+                            ? { background: "#27e8a7", color: "#04130d" }
+                            : { background: "#17171c", color: "var(--fg)" }
+                        }
+                      >
+                        {m.content}
+                      </div>
+                    )}
                     <span className="mt-1 flex items-center gap-2 font-mono text-[9px] text-[var(--muted)]">
                       {timeOf(m.sentAt)}
                       <button
@@ -426,7 +475,53 @@ export default function TalkmakerPage() {
                 );
               })}
             </div>
+            {pending && (
+              <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1.5">
+                {pending.type.startsWith("video/") ? (
+                  // biome-ignore lint/a11y/useMediaCaption: preview of staged clip
+                  <video
+                    src={pending.url}
+                    className="h-12 w-12 rounded-lg object-cover"
+                  />
+                ) : (
+                  <img
+                    src={pending.url}
+                    alt=""
+                    className="h-12 w-12 rounded-lg object-cover"
+                  />
+                )}
+                <span className="font-mono text-[10px] text-[var(--muted)]">
+                  첨부됨
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    URL.revokeObjectURL(pending.url);
+                    setPending(null);
+                  }}
+                  className="px-1.5 font-mono text-[12px] text-[var(--muted)] hover:text-[#ff5e3a]"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             <div className="flex items-end gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,video/*"
+                hidden
+                onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={sender == null || uploading}
+                title="사진·동영상 첨부"
+                className="rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2.5 text-sm text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30"
+              >
+                {uploading ? "…" : "+"}
+              </button>
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -448,7 +543,7 @@ export default function TalkmakerPage() {
               <button
                 type="button"
                 onClick={send}
-                disabled={sender == null || !draft.trim()}
+                disabled={sender == null || (!draft.trim() && !pending)}
                 className="rounded-xl bg-[var(--fg)] px-4 py-2.5 font-mono text-xs text-black disabled:opacity-30"
               >
                 전송
