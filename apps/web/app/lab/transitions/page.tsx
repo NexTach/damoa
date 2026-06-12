@@ -103,7 +103,9 @@ export default function TransitionsPage() {
               onClick={() => startVT(() => setOpenId(p.id))}
               className="group relative aspect-[4/5] overflow-hidden rounded-2xl text-left"
               style={{
-                ...vt(`tile-${p.id}`),
+                // 상세가 열리면 이름을 떼서 view-transition-name 이 한 곳에만 존재하게 한다
+                // (중복되면 브라우저가 전환을 취소 → 하드 컷)
+                ...(openId === null ? vt(`tile-${p.id}`) : {}),
                 backgroundImage: `linear-gradient(150deg, ${p.from}, ${p.to})`,
               }}
             >
