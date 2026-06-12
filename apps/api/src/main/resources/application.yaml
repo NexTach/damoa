@@ -1,6 +1,10 @@
 spring:
   application:
     name: damoa
+  # Use JDK dynamic proxies (interface-based) so @Transactional service impls
+  # need not be open (Bazel build has no kotlin-spring/all-open plugin).
+  aop:
+    proxy-target-class: false
   # MySQL (JPA/JDBC) — 환경변수로 주입, 로컬 기본값 제공
   datasource:
     url: ${DB_JDBC_URL:jdbc:mysql://localhost:3306/damoa}

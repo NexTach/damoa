@@ -1,7 +1,6 @@
 package io.github.snowykte0426.damoa.config
 
 import io.github.snowykte0426.damoa.auth.JwtAuthFilter
-import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -13,34 +12,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.CorsConfigurationSource
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource
-import org.springframework.web.reactive.function.client.WebClient
-
-@ConfigurationProperties(prefix = "app")
-data class AppProperties(
-    val jwtSecret: String = "",
-    val frontendUrl: String = "",
-    val datagsm: DataGsm = DataGsm(),
-) {
-    data class DataGsm(
-        val authBase: String = "https://oauth.authorization.datagsm.kr",
-        val resourceBase: String = "https://oauth.resource.datagsm.kr",
-        val clientId: String = "",
-        val clientSecret: String = "",
-        val redirectUri: String = "",
-        // 빈 값이면 scope 파라미터를 아예 보내지 않음 (이 클라이언트는 허용 스코프가 없어 scope를 보내면 invalid_scope)
-        val scope: String = "",
-    )
-}
-
-@Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(AppProperties::class)
-class WebClientConfig {
-    @Bean
-    fun webClient(): WebClient = WebClient.builder().build()
-}
 
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
+@EnableConfigurationProperties(AppProperties::class)
 class SecurityConfig(
     private val jwtFilter: JwtAuthFilter,
     private val props: AppProperties,
