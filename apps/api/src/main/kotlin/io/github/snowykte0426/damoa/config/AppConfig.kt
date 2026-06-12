@@ -27,7 +27,7 @@ data class AppProperties(
         val clientId: String = "",
         val clientSecret: String = "",
         val redirectUri: String = "",
-        val scope: String = "STUDENT_READ",
+        val scope: String = "self:read",
     )
 }
 

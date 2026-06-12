@@ -39,4 +39,4 @@ app:
     client-id: ${DATAGSM_CLIENT_ID:}
     client-secret: ${DATAGSM_CLIENT_SECRET:}
     redirect-uri: ${DATAGSM_REDIRECT_URI:http://localhost:8080/api/auth/datagsm/callback}
-    scope: ${DATAGSM_SCOPE:STUDENT_READ}
+    scope: ${DATAGSM_SCOPE:self:read}
