@@ -2,6 +2,18 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DialogProvider, useDialog } from "@/components/dialog";
+import {
+  IconArrowLeft,
+  IconCamera,
+  IconPaperclip,
+  IconPencil,
+  IconPlus,
+  IconSend,
+  IconSettings,
+  IconTrash,
+  IconX,
+} from "@/components/icons";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   clearToken,
@@ -171,6 +183,15 @@ function Avatar({ persona, size = 32 }: { persona?: Persona; size?: number }) {
 }
 
 export default function TalkmakerPage() {
+  return (
+    <DialogProvider>
+      <TalkmakerInner />
+    </DialogProvider>
+  );
+}
+
+function TalkmakerInner() {
+  const dialog = useDialog();
   const [status, setStatus] = useState<"loading" | "anon" | "ready">("loading");
   const [me, setMe] = useState<Me | null>(null);
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -272,7 +293,9 @@ export default function TalkmakerPage() {
   };
 
   const newRoom = async () => {
-    const title = prompt("채팅방 이름")?.trim();
+    const title = (
+      await dialog.prompt("새 채팅방", { placeholder: "채팅방 이름" })
+    )?.trim();
     if (!title) return;
     const r = await createRoom({
       title,
@@ -284,7 +307,12 @@ export default function TalkmakerPage() {
     setSettingsOpen(true);
   };
   const removeRoom = async (r: Room) => {
-    if (!confirm(`'${r.title}' 삭제?`)) return;
+    const ok = await dialog.confirm(`'${r.title}' 채팅방을 삭제할까요?`, {
+      title: "채팅방 삭제",
+      confirmText: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     await deleteRoom(r.id);
     setRooms((cur) => cur.filter((x) => x.id !== r.id));
     if (room?.id === r.id) {
@@ -319,7 +347,7 @@ export default function TalkmakerPage() {
       const { key, type } = await uploadAttachment(file);
       setPending({ key, type, url: URL.createObjectURL(file) });
     } catch {
-      alert("파일 업로드에 실패했어요.");
+      dialog.alert("파일 업로드에 실패했어요.");
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -348,6 +376,12 @@ export default function TalkmakerPage() {
   };
   const removeMessage = async (id: number) => {
     if (!room) return;
+    const ok = await dialog.confirm("이 메시지를 삭제할까요?", {
+      title: "메시지 삭제",
+      confirmText: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     await deleteMessage(room.id, id);
     setMessages((cur) => cur.filter((m) => m.id !== id));
   };
@@ -475,9 +509,10 @@ export default function TalkmakerPage() {
           <button
             type="button"
             onClick={newRoom}
-            className="font-mono text-xs text-[var(--muted)] hover:text-[var(--fg)]"
+            aria-label="새 채팅방"
+            className="grid h-6 w-6 place-items-center rounded-full text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--fg)]"
           >
-            +
+            <IconPlus size={14} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-2 pb-3">
@@ -506,9 +541,10 @@ export default function TalkmakerPage() {
               <button
                 type="button"
                 onClick={() => removeRoom(r)}
-                className="hidden font-mono text-[10px] text-[var(--muted)] hover:text-[#ff5e3a] group-hover:inline"
+                aria-label="채팅방 삭제"
+                className="hidden shrink-0 text-[var(--muted)] hover:text-[#ff5e3a] group-hover:block"
               >
-                ✕
+                <IconTrash size={13} />
               </button>
             </div>
           ))}
@@ -530,19 +566,17 @@ export default function TalkmakerPage() {
         <section className="relative flex flex-1 flex-col">
           <header className="flex items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-4 md:px-6">
             <div className="flex min-w-0 items-center gap-2">
-              {!capture && (
-                <button
-                  type="button"
-                  onClick={() => setRoom(null)}
-                  aria-label="목록으로"
-                  className="shrink-0 font-mono text-base text-[var(--muted)] hover:text-[var(--fg)] md:hidden"
-                >
-                  ←
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setRoom(null)}
+                aria-label="목록으로"
+                className="shrink-0 text-[var(--muted)] hover:text-[var(--fg)] md:hidden"
+              >
+                <IconArrowLeft size={20} />
+              </button>
               <div className="truncate font-display text-xl">{room.title}</div>
             </div>
-            <div className="flex shrink-0 items-center gap-3 font-mono text-[10px] tracking-[0.25em] text-[var(--muted)]">
+            <div className="flex shrink-0 items-center gap-1 text-[var(--muted)]">
               <button
                 type="button"
                 onClick={() => {
@@ -550,17 +584,21 @@ export default function TalkmakerPage() {
                   setSettingsOpen(false);
                   setEditing(null);
                 }}
-                className={`hover:text-[var(--fg)] ${capture ? "text-[var(--accent)]" : ""}`}
+                aria-label={capture ? "캡처 모드 종료" : "캡처 모드"}
+                title={capture ? "캡처 모드 종료" : "캡처 모드"}
+                className={`grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)] ${capture ? "bg-[var(--hover-strong)] text-[var(--accent)]" : ""}`}
               >
-                {capture ? "✕ 캡처 종료" : "📷 캡처"}
+                {capture ? <IconX size={18} /> : <IconCamera size={18} />}
               </button>
               {!capture && (
                 <button
                   type="button"
                   onClick={() => setSettingsOpen((v) => !v)}
-                  className="hover:text-[var(--fg)]"
+                  aria-label="참여자 · 설정"
+                  title="참여자 · 설정"
+                  className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
                 >
-                  참여자 · 설정
+                  <IconSettings size={18} />
                 </button>
               )}
             </div>
@@ -623,7 +661,7 @@ export default function TalkmakerPage() {
                     )}
                     {m.attachmentExpired && (
                       <div className="mb-1 flex items-center gap-2 rounded-2xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
-                        <span aria-hidden>🗑️</span> 만료된 파일입니다
+                        <IconTrash size={13} /> 만료된 파일입니다
                       </div>
                     )}
                     {m.attachmentUrl &&
@@ -712,23 +750,27 @@ export default function TalkmakerPage() {
                         )}
                         {!capture && (
                           <span
-                            className={`absolute top-0 flex gap-2 font-mono text-[9px] text-[var(--muted)] opacity-0 transition-opacity group-hover:opacity-100 ${
+                            className={`absolute top-0 flex gap-1 text-[var(--muted)] opacity-0 transition-opacity group-hover:opacity-100 ${
                               mine ? "left-0" : "right-0"
                             }`}
                           >
                             <button
                               type="button"
                               onClick={() => startEdit(m)}
-                              className="hover:text-[var(--fg)]"
+                              aria-label="수정"
+                              title="수정"
+                              className="grid h-6 w-6 place-items-center rounded-full bg-[var(--bg-2)] hover:text-[var(--fg)]"
                             >
-                              수정
+                              <IconPencil size={12} />
                             </button>
                             <button
                               type="button"
                               onClick={() => removeMessage(m.id)}
-                              className="hover:text-[#ff5e3a]"
+                              aria-label="삭제"
+                              title="삭제"
+                              className="grid h-6 w-6 place-items-center rounded-full bg-[var(--bg-2)] hover:text-[#ff5e3a]"
                             >
-                              삭제
+                              <IconTrash size={12} />
                             </button>
                           </span>
                         )}
@@ -740,9 +782,9 @@ export default function TalkmakerPage() {
             })}
           </div>
 
-          {/* 작성 — 캡처 모드에선 숨김 */}
-          {!capture && (
-            <div className="border-t border-[var(--line)] px-4 py-4 md:px-6">
+          {/* 작성 — 입력창은 유지, 캡처 모드에선 페르소나 선택기만 숨김 */}
+          <div className="border-t border-[var(--line)] px-4 py-4 md:px-6">
+            {!capture && (
               <div className="mb-3 flex flex-wrap gap-2">
                 {room.participantPersonaIds.length === 0 && (
                   <span className="font-mono text-[10px] text-[var(--muted)]">
@@ -773,84 +815,92 @@ export default function TalkmakerPage() {
                   );
                 })}
               </div>
-              {pending && (
-                <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1.5">
-                  {pending.type.startsWith("video/") ? (
-                    // biome-ignore lint/a11y/useMediaCaption: preview of staged clip
-                    <video
-                      src={pending.url}
-                      className="h-12 w-12 rounded-lg object-cover"
-                    />
-                  ) : (
-                    <img
-                      src={pending.url}
-                      alt=""
-                      className="h-12 w-12 rounded-lg object-cover"
-                    />
-                  )}
-                  <span className="font-mono text-[10px] text-[var(--muted)]">
-                    첨부됨
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      URL.revokeObjectURL(pending.url);
-                      setPending(null);
-                    }}
-                    className="px-1.5 font-mono text-[12px] text-[var(--muted)] hover:text-[#ff5e3a]"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-              <div className="flex items-end gap-2">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*,video/*"
-                  hidden
-                  onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-                />
+            )}
+            {pending && (
+              <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1.5">
+                {pending.type.startsWith("video/") ? (
+                  // biome-ignore lint/a11y/useMediaCaption: preview of staged clip
+                  <video
+                    src={pending.url}
+                    className="h-12 w-12 rounded-lg object-cover"
+                  />
+                ) : (
+                  <img
+                    src={pending.url}
+                    alt=""
+                    className="h-12 w-12 rounded-lg object-cover"
+                  />
+                )}
+                <span className="font-mono text-[10px] text-[var(--muted)]">
+                  첨부됨
+                </span>
                 <button
                   type="button"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={sender == null || busy}
-                  title="사진·동영상 첨부"
-                  className="rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2.5 text-sm text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30"
-                >
-                  {uploading ? "…" : "+"}
-                </button>
-                <textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      send();
-                    }
+                  onClick={() => {
+                    URL.revokeObjectURL(pending.url);
+                    setPending(null);
                   }}
-                  rows={1}
-                  placeholder={
-                    sender != null
-                      ? "메시지 보내기"
-                      : "보낸 사람을 먼저 고르세요"
-                  }
-                  disabled={sender == null || busy}
-                  className="max-h-32 flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50"
-                />
-                <button
-                  type="button"
-                  onClick={send}
-                  disabled={
-                    sender == null || busy || (!draft.trim() && !pending)
-                  }
-                  className="rounded-xl bg-[var(--fg)] px-4 py-2.5 font-mono text-xs text-[var(--bg)] transition-opacity disabled:opacity-30"
+                  aria-label="첨부 제거"
+                  className="grid h-6 w-6 place-items-center text-[var(--muted)] hover:text-[#ff5e3a]"
                 >
-                  {sending ? "전송 중…" : "전송"}
+                  <IconX size={14} />
                 </button>
               </div>
+            )}
+            <div className="flex items-end gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,video/*"
+                hidden
+                onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={sender == null || busy}
+                aria-label="사진·동영상 첨부"
+                title="사진·동영상 첨부"
+                className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-[var(--line)] bg-[var(--bg-2)] text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30"
+              >
+                {uploading ? (
+                  <span className="animate-pulse">…</span>
+                ) : (
+                  <IconPaperclip size={18} />
+                )}
+              </button>
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                rows={1}
+                placeholder={
+                  sender != null ? "메시지 보내기" : "보낸 사람을 먼저 고르세요"
+                }
+                disabled={sender == null || busy}
+                className="max-h-32 flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={send}
+                disabled={sender == null || busy || (!draft.trim() && !pending)}
+                aria-label="전송"
+                title="전송"
+                className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-[var(--fg)] text-[var(--bg)] transition-opacity disabled:opacity-30"
+              >
+                {sending ? (
+                  <span className="animate-pulse">…</span>
+                ) : (
+                  <IconSend size={18} />
+                )}
+              </button>
             </div>
-          )}
+          </div>
         </section>
       )}
       {personaModal && (
@@ -880,6 +930,7 @@ function PersonaManager({
   onAvatar: (p: Persona, file: File) => Promise<void>;
   onManage: () => void;
 }) {
+  const dialog = useDialog();
   const [name, setName] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
   const avatarInput = useRef<HTMLInputElement>(null);
@@ -896,7 +947,7 @@ function PersonaManager({
     try {
       await onAvatar(p, file);
     } catch {
-      alert("프로필 사진 변경에 실패했어요.");
+      dialog.alert("프로필 사진 변경에 실패했어요.");
     } finally {
       setBusyId(null);
       if (avatarInput.current) avatarInput.current.value = "";
@@ -946,10 +997,20 @@ function PersonaManager({
             {p.name}
             <button
               type="button"
-              onClick={() => onDelete(p.id)}
-              className="hidden text-[var(--muted)] group-hover:inline hover:text-[#ff5e3a]"
+              onClick={async () => {
+                if (
+                  await dialog.confirm(`'${p.name}' 페르소나를 삭제할까요?`, {
+                    title: "페르소나 삭제",
+                    confirmText: "삭제",
+                    danger: true,
+                  })
+                )
+                  onDelete(p.id);
+              }}
+              aria-label="삭제"
+              className="hidden text-[var(--muted)] group-hover:block hover:text-[#ff5e3a]"
             >
-              ✕
+              <IconX size={12} />
             </button>
           </span>
         ))}
@@ -970,9 +1031,10 @@ function PersonaManager({
         />
         <button
           type="submit"
-          className="rounded-md bg-[var(--hover-strong)] px-2 font-mono text-xs hover:bg-[var(--hover)]"
+          aria-label="페르소나 추가"
+          className="grid w-8 shrink-0 place-items-center rounded-md bg-[var(--hover-strong)] hover:bg-[var(--hover)]"
         >
-          +
+          <IconPlus size={14} />
         </button>
       </form>
     </div>
@@ -1009,78 +1071,89 @@ function RoomSettings({
     });
   };
   return (
-    <div className="absolute right-3 top-16 z-20 w-[calc(100%-1.5rem)] max-w-72 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-4 shadow-2xl md:right-6">
-      <div className="flex items-center justify-between pb-1">
-        <span className="font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
-          제목
-        </span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="font-mono text-xs text-[var(--muted)]"
-        >
-          ✕
-        </button>
-      </div>
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={saveTitle}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-        }}
-        placeholder="채팅방 제목"
-        className="mb-3 w-full rounded-md border border-[var(--line)] bg-transparent px-2 py-1.5 text-[13px] outline-none focus:border-[var(--muted)]"
+    <div className="fixed inset-0 z-30 md:absolute md:inset-auto md:right-6 md:top-16">
+      {/* Mobile backdrop (desktop is a popover, no dimming). */}
+      <button
+        type="button"
+        aria-label="닫기"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40 md:hidden"
       />
-      <div className="pb-2 font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
-        참여자
-      </div>
-      {personas.length === 0 && (
-        <p className="font-mono text-[11px] text-[var(--muted)]">
-          왼쪽에서 페르소나를 먼저 만드세요
-        </p>
-      )}
-      <div className="space-y-1">
-        {personas.map((p) => {
-          const inRoom = room.participantPersonaIds.includes(p.id);
-          const isSelf = room.selfPersonaId === p.id;
-          return (
-            <div
-              key={p.id}
-              className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-[var(--hover)]"
-            >
-              <button
-                type="button"
-                onClick={() => toggle(p.id)}
-                className="flex flex-1 items-center gap-2"
+      <div className="sheet-up absolute inset-x-0 bottom-0 max-h-[80vh] overflow-y-auto rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-4 pb-6 shadow-2xl md:static md:max-h-none md:w-72 md:rounded-xl md:pb-4">
+        <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--line)] md:hidden" />
+        <div className="flex items-center justify-between pb-1">
+          <span className="font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
+            제목
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="text-[var(--muted)] hover:text-[var(--fg)]"
+          >
+            <IconX size={16} />
+          </button>
+        </div>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={saveTitle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+          placeholder="채팅방 제목"
+          className="mb-3 w-full rounded-md border border-[var(--line)] bg-transparent px-2 py-1.5 text-[13px] outline-none focus:border-[var(--muted)]"
+        />
+        <div className="pb-2 font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
+          참여자
+        </div>
+        {personas.length === 0 && (
+          <p className="font-mono text-[11px] text-[var(--muted)]">
+            왼쪽에서 페르소나를 먼저 만드세요
+          </p>
+        )}
+        <div className="space-y-1">
+          {personas.map((p) => {
+            const inRoom = room.participantPersonaIds.includes(p.id);
+            const isSelf = room.selfPersonaId === p.id;
+            return (
+              <div
+                key={p.id}
+                className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-[var(--hover)]"
               >
-                <input
-                  type="checkbox"
-                  checked={inRoom}
-                  readOnly
-                  className="accent-[#27e8a7]"
-                />
-                <Avatar persona={p} size={20} />
-                <span className="text-[13px]">{p.name}</span>
-              </button>
-              {inRoom && (
                 <button
                   type="button"
-                  onClick={() =>
-                    onPatch({ selfPersonaId: isSelf ? null : p.id })
-                  }
-                  className={`rounded-full px-2 py-0.5 font-mono text-[9px] ${
-                    isSelf
-                      ? "bg-[#27e8a7] text-black"
-                      : "border border-[var(--line)] text-[var(--muted)]"
-                  }`}
+                  onClick={() => toggle(p.id)}
+                  className="flex flex-1 items-center gap-2"
                 >
-                  나
+                  <input
+                    type="checkbox"
+                    checked={inRoom}
+                    readOnly
+                    className="accent-[#27e8a7]"
+                  />
+                  <Avatar persona={p} size={20} />
+                  <span className="text-[13px]">{p.name}</span>
                 </button>
-              )}
-            </div>
-          );
-        })}
+                {inRoom && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onPatch({ selfPersonaId: isSelf ? null : p.id })
+                    }
+                    className={`rounded-full px-2 py-0.5 font-mono text-[9px] ${
+                      isSelf
+                        ? "bg-[#27e8a7] text-black"
+                        : "border border-[var(--line)] text-[var(--muted)]"
+                    }`}
+                  >
+                    나
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -1104,6 +1177,7 @@ function PersonaModal({
   ) => Promise<void>;
   onClose: () => void;
 }) {
+  const dialog = useDialog();
   const [name, setName] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
   const avatarInput = useRef<HTMLInputElement>(null);
@@ -1120,7 +1194,7 @@ function PersonaModal({
     try {
       await onAvatar(p, file);
     } catch {
-      alert("프로필 사진 변경에 실패했어요.");
+      dialog.alert("프로필 사진 변경에 실패했어요.");
     } finally {
       setBusyId(null);
       if (avatarInput.current) avatarInput.current.value = "";
@@ -1129,7 +1203,7 @@ function PersonaModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
       // biome-ignore lint/a11y/noStaticElementInteractions: backdrop click to close
       role="presentation"
@@ -1138,16 +1212,17 @@ function PersonaModal({
         onClick={(e) => e.stopPropagation()}
         // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
         role="presentation"
-        className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl border border-[var(--line)] bg-[var(--bg-2)] shadow-2xl"
+        className="sheet-up flex max-h-[85vh] w-full max-w-md flex-col rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] shadow-2xl sm:max-h-[80vh] sm:rounded-2xl"
       >
         <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-4">
           <span className="font-display text-lg">페르소나 관리</span>
           <button
             type="button"
             onClick={onClose}
-            className="font-mono text-sm text-[var(--muted)] hover:text-[var(--fg)]"
+            aria-label="닫기"
+            className="text-[var(--muted)] hover:text-[var(--fg)]"
           >
-            ✕
+            <IconX size={18} />
           </button>
         </div>
         <input
@@ -1175,8 +1250,8 @@ function PersonaModal({
                 className="relative shrink-0 rounded-full transition-opacity hover:opacity-80"
               >
                 <Avatar persona={p} size={44} />
-                <span className="absolute -bottom-1 -right-1 grid h-4 w-4 place-items-center rounded-full bg-[var(--fg)] text-[8px] text-[var(--bg)]">
-                  ✎
+                <span className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-[var(--fg)] text-[var(--bg)]">
+                  <IconPencil size={10} />
                 </span>
                 {busyId === p.id && (
                   <span className="absolute inset-0 grid place-items-center rounded-full bg-black/50 text-[9px] text-white">
@@ -1204,12 +1279,23 @@ function PersonaModal({
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      if (confirm(`'${p.name}' 삭제?`)) onDelete(p.id);
+                    onClick={async () => {
+                      if (
+                        await dialog.confirm(
+                          `'${p.name}' 페르소나를 삭제할까요?`,
+                          {
+                            title: "페르소나 삭제",
+                            confirmText: "삭제",
+                            danger: true,
+                          },
+                        )
+                      )
+                        onDelete(p.id);
                     }}
-                    className="shrink-0 font-mono text-[11px] text-[var(--muted)] hover:text-[#ff5e3a]"
+                    aria-label="삭제"
+                    className="grid h-7 w-7 shrink-0 place-items-center text-[var(--muted)] hover:text-[#ff5e3a]"
                   >
-                    삭제
+                    <IconTrash size={14} />
                   </button>
                 </div>
                 <input

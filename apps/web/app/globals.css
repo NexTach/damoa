@@ -128,6 +128,22 @@ body {
   animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Bottom-sheet / modal entrance (slides up on mobile, fades on desktop). */
+@keyframes sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sheet-up {
+  animation: sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 /* View Transitions — 공유 요소 모핑을 조금 더 부드럽게 */
 ::view-transition-group(*) {
   animation-duration: 0.5s;
