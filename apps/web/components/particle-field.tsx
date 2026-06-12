@@ -100,7 +100,17 @@ function Field() {
 
 export default function ParticleField() {
   return (
-    <Canvas camera={{ position: [0, 0, 8], fov: 50 }} dpr={[1, 2]}>
+    <Canvas
+      camera={{ position: [0, 0, 8], fov: 50 }}
+      dpr={[1, 2]}
+      onCreated={({ gl }) =>
+        gl.domElement.addEventListener(
+          "webglcontextlost",
+          (e) => e.preventDefault(),
+          false,
+        )
+      }
+    >
       <color attach="background" args={["#070709"]} />
       <Field />
     </Canvas>

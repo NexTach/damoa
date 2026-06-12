@@ -8,6 +8,7 @@ import { LABS, type Lab } from "@/lib/labs";
 
 const R = 2.6; // 휠 반지름
 const TILT = 0.52; // 휠 기울기(rad)
+const MAX_VEL = 0.22; // 프레임당 최대 회전 속도(rad) — 휠 폭주 방지
 
 function PosterCard({
   lab,
@@ -133,12 +134,15 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
       dragging.current = false;
       el.style.cursor = "grab";
     };
-    // 마우스 휠/트랙패드 스크롤로 회전
+    // 마우스 휠/트랙패드 스크롤로 회전 (deltaMode 정규화 + 클램프)
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
-      const delta =
+      const unit =
+        e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
+      const raw =
         Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
-      vel.current += delta * 0.0006;
+      vel.current += raw * unit * 0.00012;
+      vel.current = Math.max(-MAX_VEL, Math.min(MAX_VEL, vel.current));
     };
     el.addEventListener("pointerdown", down);
     el.addEventListener("wheel", wheel, { passive: false });
@@ -153,6 +157,8 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
   }, [gl]);
 
   useFrame(() => {
+    // 폭주 방지: 속도 클램프
+    vel.current = Math.max(-MAX_VEL, Math.min(MAX_VEL, vel.current));
     offset.current += vel.current;
     vel.current *= 0.9;
     // 관성이 멎으면 가장 가까운 슬롯으로 스냅
@@ -160,6 +166,9 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
       const nearest = Math.round(offset.current / slot) * slot;
       offset.current += (nearest - offset.current) * 0.1;
     }
+    // 각도가 무한정 커져 정밀도 깨지지 않게 [0, 2π) 로 래핑
+    const TAU = Math.PI * 2;
+    offset.current = ((offset.current % TAU) + TAU) % TAU;
     const k = Math.round(offset.current / slot);
     const active = ((-k % N) + N) % N;
     if (active !== lastActive.current) {
@@ -192,7 +201,15 @@ export default function PosterWheel({
     <Canvas
       camera={{ position: [0, 0, 7.6], fov: 38 }}
       dpr={[1, 2]}
-      gl={{ antialias: true }}
+      gl={{ antialias: true, powerPreference: "high-performance" }}
+      onCreated={({ gl }) => {
+        // 컨텍스트 로스 시 기본 동작(영구 손실)을 막아 자동 복구되게 한다
+        gl.domElement.addEventListener(
+          "webglcontextlost",
+          (e) => e.preventDefault(),
+          false,
+        );
+      }}
     >
       <color attach="background" args={["#08080a"]} />
       <fog attach="fog" args={["#08080a", 7, 18]} />

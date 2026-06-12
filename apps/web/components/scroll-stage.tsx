@@ -77,7 +77,17 @@ function Sections() {
 
 export default function ScrollStage() {
   return (
-    <Canvas camera={{ position: [0, 0, 6], fov: 45 }} dpr={[1, 2]}>
+    <Canvas
+      camera={{ position: [0, 0, 6], fov: 45 }}
+      dpr={[1, 2]}
+      onCreated={({ gl }) =>
+        gl.domElement.addEventListener(
+          "webglcontextlost",
+          (e) => e.preventDefault(),
+          false,
+        )
+      }
+    >
       <color attach="background" args={["#08080a"]} />
       <ambientLight intensity={0.6} />
       <directionalLight position={[3, 4, 5]} intensity={1.3} />

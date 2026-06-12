@@ -21,7 +21,7 @@ const PosterWheel = dynamic(() => import("@/components/poster-wheel"), {
 
 export default function Home() {
   const [active, setActive] = useState(0);
-  const lab = LABS[active];
+  const lab = LABS[active] ?? LABS[0];
 
   return (
     <main className="relative h-dvh w-screen overflow-hidden bg-[var(--bg)]">

@@ -101,7 +101,17 @@ function Field() {
 
 export default function ShaderStage() {
   return (
-    <Canvas gl={{ antialias: false }} dpr={[1, 2]}>
+    <Canvas
+      gl={{ antialias: false }}
+      dpr={[1, 2]}
+      onCreated={({ gl }) =>
+        gl.domElement.addEventListener(
+          "webglcontextlost",
+          (e) => e.preventDefault(),
+          false,
+        )
+      }
+    >
       <Field />
     </Canvas>
   );
