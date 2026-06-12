@@ -6,9 +6,13 @@ import { useEffect, useRef } from "react";
 import type * as THREE from "three";
 import { LABS, type Lab } from "@/lib/labs";
 
-const R = 2.6; // 휠 반지름
-const TILT = 0.52; // 휠 기울기(rad)
-const MAX_VEL = 0.22; // 프레임당 최대 회전 속도(rad) — 휠 폭주 방지
+// 토성 고리 느낌: 큰 반지름 + 강한 기울기 + 대각선 회전
+const R = 3.3; // 고리 반지름
+const TILT = 1.02; // 기울기(rad) — 거의 옆에서 보듯 납작한 타원
+const DIAG = 0.5; // 대각선 회전(rad)
+const COSD = Math.cos(DIAG);
+const SIND = Math.sin(DIAG);
+const MAX_VEL = 0.22;
 
 function PosterCard({
   lab,
@@ -22,58 +26,45 @@ function PosterCard({
   offsetRef: { current: number };
 }) {
   const group = useRef<THREE.Group>(null);
-  const frame = useRef<THREE.MeshStandardMaterial>(null);
+  const mat = useRef<THREE.MeshStandardMaterial>(null);
 
   useFrame(() => {
     const g = group.current;
     if (!g) return;
     const slot = (Math.PI * 2) / count;
     const ang = index * slot + offsetRef.current;
-    // X축으로 기울인 원 위에 배치 (앞=상단이 카메라로 다가오며 커짐)
-    g.position.set(
-      Math.sin(ang) * R,
-      Math.cos(ang) * R * Math.cos(TILT) + 0.15,
-      Math.cos(ang) * R * Math.sin(TILT),
-    );
-    const f = (Math.cos(ang) + 1) / 2; // 1 = 정면(액티브)
-    g.scale.setScalar(0.66 + f * 0.62);
-    g.renderOrder = Math.round(f * 20);
-    if (frame.current) {
-      frame.current.emissiveIntensity = 0.12 + f * 1.7;
-      frame.current.opacity = 0.45 + f * 0.55;
+    // 수평 고리(XZ 평면)를 X로 기울이고, 다시 화면에서 대각선으로 회전
+    const cx = Math.sin(ang) * R;
+    const cy = Math.cos(ang) * R * Math.cos(TILT);
+    const cz = Math.cos(ang) * R * Math.sin(TILT);
+    g.position.set(cx * COSD - cy * SIND, cx * SIND + cy * COSD, cz);
+    const f = (Math.cos(ang) + 1) / 2; // 1 = 정면(카메라에 가까움)
+    g.scale.setScalar(0.5 + f * 0.78);
+    g.renderOrder = Math.round(f * 30);
+    if (mat.current) {
+      mat.current.emissiveIntensity = 0.05 + f * 0.7;
+      mat.current.opacity = 0.32 + f * 0.68;
     }
   });
 
   return (
     <Billboard ref={group}>
-      {/* 액센트 프레임(글로우) */}
-      <RoundedBox args={[1.74, 2.4, 0.04]} radius={0.11} smoothness={4}>
+      {/* 솔리드 컬러 포스터(팜플렛 스타일) */}
+      <RoundedBox args={[1.5, 2.08, 0.06]} radius={0.05} smoothness={4}>
         <meshStandardMaterial
-          ref={frame}
+          ref={mat}
           color={lab.color}
           emissive={lab.color}
-          emissiveIntensity={0.5}
+          emissiveIntensity={0.1}
+          roughness={0.45}
           transparent
           toneMapped={false}
         />
       </RoundedBox>
-      {/* 어두운 본문 */}
-      <RoundedBox
-        args={[1.6, 2.26, 0.08]}
-        radius={0.1}
-        smoothness={4}
-        position={[0, 0, 0.03]}
-      >
-        <meshStandardMaterial
-          color="#0c0c10"
-          roughness={0.55}
-          metalness={0.15}
-        />
-      </RoundedBox>
       <Text
-        position={[0, 0.64, 0.1]}
-        fontSize={0.7}
-        color={lab.color}
+        position={[0, 0.2, 0.05]}
+        fontSize={1.05}
+        color="#0a0a0a"
         anchorX="center"
         anchorY="middle"
         fontWeight="bold"
@@ -82,26 +73,16 @@ function PosterCard({
         {lab.index}
       </Text>
       <Text
-        position={[0, -0.16, 0.1]}
-        fontSize={0.205}
-        maxWidth={1.34}
+        position={[0, -0.78, 0.05]}
+        fontSize={0.155}
+        maxWidth={1.28}
         textAlign="center"
-        lineHeight={1.05}
-        color="#f1f0e8"
+        lineHeight={1.0}
+        color="#0a0a0a"
         anchorX="center"
         anchorY="middle"
       >
         {lab.title}
-      </Text>
-      <Text
-        position={[0, -0.92, 0.1]}
-        fontSize={0.092}
-        letterSpacing={0.18}
-        color="#7d7d76"
-        anchorX="center"
-        anchorY="middle"
-      >
-        {lab.tag.toUpperCase()}
       </Text>
     </Billboard>
   );
@@ -134,7 +115,6 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
       dragging.current = false;
       el.style.cursor = "grab";
     };
-    // 마우스 휠/트랙패드 스크롤로 회전 (deltaMode 정규화 + 클램프)
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
       const unit =
@@ -156,16 +136,13 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
   }, [gl]);
 
   useFrame(() => {
-    // 폭주 방지: 속도 클램프
     vel.current = Math.max(-MAX_VEL, Math.min(MAX_VEL, vel.current));
     offset.current += vel.current;
     vel.current *= 0.9;
-    // 관성이 멎으면 가장 가까운 슬롯으로 스냅
     if (!dragging.current && Math.abs(vel.current) < 0.0016) {
       const nearest = Math.round(offset.current / slot) * slot;
       offset.current += (nearest - offset.current) * 0.1;
     }
-    // 각도가 무한정 커져 정밀도 깨지지 않게 [0, 2π) 로 래핑
     const TAU = Math.PI * 2;
     offset.current = ((offset.current % TAU) + TAU) % TAU;
     const k = Math.round(offset.current / slot);
@@ -198,11 +175,10 @@ export default function PosterWheel({
 }) {
   return (
     <Canvas
-      camera={{ position: [0, 0, 7.6], fov: 38 }}
+      camera={{ position: [0, 0, 9], fov: 40 }}
       dpr={[1, 2]}
       gl={{ antialias: true, powerPreference: "high-performance" }}
       onCreated={({ gl }) => {
-        // 컨텍스트 로스 시 기본 동작(영구 손실)을 막아 자동 복구되게 한다
         gl.domElement.addEventListener(
           "webglcontextlost",
           (e) => e.preventDefault(),
@@ -211,12 +187,12 @@ export default function PosterWheel({
       }}
     >
       <color attach="background" args={["#08080a"]} />
-      <fog attach="fog" args={["#08080a", 7, 18]} />
-      <ambientLight intensity={0.85} />
-      <directionalLight position={[3, 5, 6]} intensity={1.1} />
+      <fog attach="fog" args={["#08080a", 7, 19]} />
+      <ambientLight intensity={0.9} />
+      <directionalLight position={[3, 5, 6]} intensity={1.0} />
       <directionalLight
         position={[-4, -2, 1]}
-        intensity={0.35}
+        intensity={0.3}
         color="#6f8cff"
       />
       <Wheel onActive={onActiveChange} />
