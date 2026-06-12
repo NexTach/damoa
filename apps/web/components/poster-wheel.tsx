@@ -9,7 +9,7 @@ import { LABS, type Lab } from "@/lib/labs";
 // 토성 고리 느낌: 큰 반지름 + 강한 기울기 + 대각선 회전
 const R = 3.3; // 고리 반지름
 const TILT = 1.02; // 기울기(rad) — 거의 옆에서 보듯 납작한 타원
-const DIAG = 0.5; // 대각선 회전(rad)
+const DIAG = -0.5; // 대각선 회전(rad) — 가까운쪽 우상단 / 먼쪽 좌하단
 const COSD = Math.cos(DIAG);
 const SIND = Math.sin(DIAG);
 const MAX_VEL = 0.22;
@@ -26,7 +26,8 @@ function PosterCard({
   offsetRef: { current: number };
 }) {
   const group = useRef<THREE.Group>(null);
-  const mat = useRef<THREE.MeshStandardMaterial>(null);
+  const glow = useRef<THREE.MeshStandardMaterial>(null);
+  const body = useRef<THREE.MeshPhysicalMaterial>(null);
 
   useFrame(() => {
     const g = group.current;
@@ -41,30 +42,51 @@ function PosterCard({
     const f = (Math.cos(ang) + 1) / 2; // 1 = 정면(카메라에 가까움)
     g.scale.setScalar(0.5 + f * 0.78);
     g.renderOrder = Math.round(f * 30);
-    if (mat.current) {
-      mat.current.emissiveIntensity = 0.05 + f * 0.7;
-      mat.current.opacity = 0.32 + f * 0.68;
+    if (glow.current) {
+      glow.current.emissiveIntensity = 0.15 + f * 1.3;
+      glow.current.opacity = 0.2 + f * 0.6;
     }
+    if (body.current) body.current.opacity = 0.4 + f * 0.5;
   });
 
   return (
     <Billboard ref={group}>
-      {/* 솔리드 컬러 포스터(팜플렛 스타일) */}
-      <RoundedBox args={[1.5, 2.08, 0.06]} radius={0.05} smoothness={4}>
+      {/* 컬러 글로우(유리 가장자리 빛) */}
+      <RoundedBox args={[1.58, 2.16, 0.02]} radius={0.09} smoothness={4}>
         <meshStandardMaterial
-          ref={mat}
+          ref={glow}
           color={lab.color}
           emissive={lab.color}
-          emissiveIntensity={0.1}
-          roughness={0.45}
+          emissiveIntensity={0.6}
           transparent
+          opacity={0.4}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </RoundedBox>
+      {/* 프로스트 유리 본체 */}
+      <RoundedBox
+        args={[1.5, 2.08, 0.1]}
+        radius={0.08}
+        smoothness={4}
+        position={[0, 0, 0.02]}
+      >
+        <meshPhysicalMaterial
+          ref={body}
+          color="#0d0f16"
+          transparent
+          opacity={0.55}
+          roughness={0.2}
+          metalness={0}
+          clearcoat={1}
+          clearcoatRoughness={0.25}
           toneMapped={false}
         />
       </RoundedBox>
       <Text
-        position={[0, 0.2, 0.05]}
-        fontSize={1.05}
-        color="#0a0a0a"
+        position={[0, 0.2, 0.09]}
+        fontSize={1.0}
+        color={lab.color}
         anchorX="center"
         anchorY="middle"
         fontWeight="bold"
@@ -73,12 +95,12 @@ function PosterCard({
         {lab.index}
       </Text>
       <Text
-        position={[0, -0.78, 0.05]}
-        fontSize={0.155}
+        position={[0, -0.78, 0.09]}
+        fontSize={0.15}
         maxWidth={1.28}
         textAlign="center"
         lineHeight={1.0}
-        color="#0a0a0a"
+        color={lab.color}
         anchorX="center"
         anchorY="middle"
       >
