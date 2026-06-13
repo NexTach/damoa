@@ -25,7 +25,8 @@ class MessageController(private val service: MessageService) {
         @PathVariable roomId: Long,
         @RequestParam(defaultValue = "40") limit: Int,
         @RequestParam(required = false) before: String?,
-    ): MessagePage = service.list(currentUserId(), roomId, limit.coerceIn(1, 100), before)
+        @RequestParam(required = false) at: Long?,
+    ): MessagePage = service.list(currentUserId(), roomId, limit.coerceIn(1, 100), before, at)
 
     @GetMapping("/search")
     fun search(

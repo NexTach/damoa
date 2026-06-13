@@ -46,11 +46,13 @@ export default function TalkSearch({
   roomId,
   personas,
   participantIds,
+  onJump,
   onClose,
 }: {
   roomId: number;
   personas: Persona[];
   participantIds: number[];
+  onJump: (messageId: number) => void;
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -204,9 +206,11 @@ export default function TalkSearch({
           {result?.messages.map((m) => {
             const p = personaBy(m.personaId);
             return (
-              <div
+              <button
+                type="button"
                 key={m.id}
-                className="flex items-start gap-2 rounded-xl px-2 py-2 hover:bg-[var(--hover)]"
+                onClick={() => onJump(m.id)}
+                className="flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left hover:bg-[var(--hover)]"
               >
                 <MiniAvatar p={p} />
                 <div className="min-w-0 flex-1">
@@ -220,7 +224,7 @@ export default function TalkSearch({
                     {snippet(m)}
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>

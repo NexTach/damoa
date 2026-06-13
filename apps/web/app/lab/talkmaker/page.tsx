@@ -298,6 +298,9 @@ function TalkmakerInner() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [jumped, setJumped] = useState(false);
+  const [highlightId, setHighlightId] = useState<number | null>(null);
+  const scrollToId = useRef<number | null>(null);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -330,11 +333,26 @@ function TalkmakerInner() {
     setStatsOpen(false);
     const page = await listMessages(r.id, { limit: 40 });
     stickBottom.current = true;
+    setJumped(false);
     setMessages(page.messages);
     setCursor(page.nextCursor);
     setHasMore(page.hasMore);
     setSender(r.selfPersonaId ?? r.participantPersonaIds[0] ?? null);
   }, []);
+
+  // Jump to a (possibly old) message from search: load the page ending at it.
+  const jumpTo = async (messageId: number) => {
+    if (!room) return;
+    setSearchOpen(false);
+    const page = await listMessages(room.id, { limit: 50, at: messageId });
+    scrollToId.current = messageId;
+    setJumped(true);
+    setMessages(page.messages);
+    setCursor(page.nextCursor);
+    setHasMore(page.hasMore);
+    setHighlightId(messageId);
+    window.setTimeout(() => setHighlightId(null), 2200);
+  };
 
   // Load the previous page when the user scrolls near the top.
   const loadOlder = useCallback(async () => {
@@ -390,7 +408,11 @@ function TalkmakerInner() {
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    if (keepScroll.current != null) {
+    if (scrollToId.current != null) {
+      const target = el.querySelector(`[data-mid="${scrollToId.current}"]`);
+      target?.scrollIntoView({ block: "center" });
+      scrollToId.current = null;
+    } else if (keepScroll.current != null) {
       el.scrollTop = el.scrollHeight - keepScroll.current;
       keepScroll.current = null;
     } else if (stickBottom.current) {
@@ -852,7 +874,8 @@ function TalkmakerInner() {
               return (
                 <div
                   key={m.id}
-                  className={`group relative flex items-start gap-2 ${grouped ? "mt-0.5" : "mt-4"} ${mine ? "flex-row-reverse" : ""}`}
+                  data-mid={m.id}
+                  className={`group relative flex items-start gap-2 rounded-2xl ${grouped ? "mt-0.5" : "mt-4"} ${mine ? "flex-row-reverse" : ""} ${highlightId === m.id ? "bg-[var(--accent)]/15 ring-1 ring-[var(--accent)] transition-colors" : "transition-colors"}`}
                 >
                   {!mine &&
                     (grouped ? (
@@ -982,6 +1005,16 @@ function TalkmakerInner() {
               );
             })}
           </div>
+
+          {jumped && (
+            <button
+              type="button"
+              onClick={() => room && openRoom(room)}
+              className="-translate-x-1/2 absolute bottom-28 left-1/2 z-10 flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--bg-2)] px-3 py-1.5 font-mono text-[10px] tracking-[0.15em] text-[var(--muted)] shadow-lg hover:text-[var(--fg)]"
+            >
+              최신 메시지로 ↓
+            </button>
+          )}
 
           {/* 작성 — 입력창은 유지, 캡처 모드에선 페르소나 선택기만 숨김 */}
           <div className="pb-safe border-t border-[var(--line)] px-4 pt-4 md:px-6 md:pb-4">
@@ -1125,6 +1158,7 @@ function TalkmakerInner() {
           roomId={room.id}
           personas={personas}
           participantIds={room.participantPersonaIds}
+          onJump={jumpTo}
           onClose={() => setSearchOpen(false)}
         />
       )}

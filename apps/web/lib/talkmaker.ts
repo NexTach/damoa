@@ -101,11 +101,12 @@ export type MessagePage = {
 };
 export const listMessages = (
   roomId: number,
-  opts?: { limit?: number; before?: string },
+  opts?: { limit?: number; before?: string; at?: number },
 ) => {
   const qs = new URLSearchParams();
   if (opts?.limit) qs.set("limit", String(opts.limit));
   if (opts?.before) qs.set("before", opts.before);
+  if (opts?.at != null) qs.set("at", String(opts.at));
   const q = qs.toString();
   return tm<MessagePage>(`/rooms/${roomId}/messages${q ? `?${q}` : ""}`);
 };

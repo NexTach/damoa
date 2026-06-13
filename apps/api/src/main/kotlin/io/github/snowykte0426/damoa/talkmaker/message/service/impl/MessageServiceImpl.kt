@@ -26,14 +26,19 @@ class MessageServiceImpl(
     private val searchCap = 100
 
     @Transactional(readOnly = true)
-    override fun list(ownerId: Long, roomId: Long, limit: Int, before: String?): MessagePage {
+    override fun list(ownerId: Long, roomId: Long, limit: Int, before: String?, at: Long?): MessagePage {
         roomService.requireOwned(ownerId, roomId)
         val page = PageRequest.of(0, limit + 1) // +1 to detect more
-        val desc = if (before == null) {
-            repository.findByRoomIdOrderBySentAtDescIdDesc(roomId, page)
-        } else {
-            val (ts, id) = decodeCursor(before)
-            repository.findOlder(roomId, ts, id, page)
+        val desc = when {
+            at != null -> {
+                val target = repository.findByIdAndRoomId(at, roomId) ?: notFound("message not found")
+                repository.findOlderOrEqual(roomId, target.sentAt, target.id, page)
+            }
+            before != null -> {
+                val (ts, id) = decodeCursor(before)
+                repository.findOlder(roomId, ts, id, page)
+            }
+            else -> repository.findByRoomIdOrderBySentAtDescIdDesc(roomId, page)
         }
         val hasMore = desc.size > limit
         val rows = desc.take(limit) // newest → oldest within page

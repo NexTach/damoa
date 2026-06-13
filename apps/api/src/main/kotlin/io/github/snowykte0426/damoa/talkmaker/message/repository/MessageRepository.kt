@@ -37,6 +37,22 @@ interface MessageRepository : JpaRepository<Message, Long> {
         pageable: Pageable,
     ): List<Message>
 
+    // Page ending at (and including) the target — used to jump to a message.
+    @Query(
+        """
+        select m from Message m
+        where m.roomId = :roomId
+          and (m.sentAt < :ts or (m.sentAt = :ts and m.id <= :id))
+        order by m.sentAt desc, m.id desc
+        """,
+    )
+    fun findOlderOrEqual(
+        @Param("roomId") roomId: Long,
+        @Param("ts") ts: Instant,
+        @Param("id") id: Long,
+        pageable: Pageable,
+    ): List<Message>
+
     @Query(
         """
         select m from Message m
