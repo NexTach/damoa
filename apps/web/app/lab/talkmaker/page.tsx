@@ -14,6 +14,7 @@ import {
   IconArrowLeft,
   IconCamera,
   IconChart,
+  IconCopy,
   IconDownload,
   IconFile,
   IconPaperclip,
@@ -230,6 +231,16 @@ function AttachmentView({
   );
 }
 
+function Spinner({ size = 16 }: { size?: number }) {
+  return (
+    <span
+      aria-hidden
+      className="inline-block animate-spin rounded-full border-2 border-current border-t-transparent"
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
 function Avatar({ persona, size = 32 }: { persona?: Persona; size?: number }) {
   const color = persona?.color ?? "#555";
   if (persona?.avatarUrl) {
@@ -302,6 +313,7 @@ function TalkmakerInner() {
   const [atBottom, setAtBottom] = useState(true);
   const [highlightId, setHighlightId] = useState<number | null>(null);
   const [actionMsg, setActionMsg] = useState<Message | null>(null);
+  const [roomAction, setRoomAction] = useState<Room | null>(null);
   const [quickPersona, setQuickPersona] = useState<Persona | null>(null);
   const scrollToId = useRef<number | null>(null);
   const pressTimer = useRef<number | null>(null);
@@ -618,6 +630,26 @@ function TalkmakerInner() {
       pressTimer.current = null;
     }
   };
+  const startRoomPress = (r: Room) => {
+    pressTimer.current = window.setTimeout(() => {
+      pressTimer.current = null;
+      setRoomAction(r);
+    }, 420);
+  };
+
+  const renameRoom = async (r: Room) => {
+    const name = (
+      await dialog.prompt("채팅방 이름 변경", { defaultValue: r.title })
+    )?.trim();
+    if (!name || name === r.title) return;
+    const updated = await updateRoom(r.id, {
+      title: name,
+      participantPersonaIds: r.participantPersonaIds,
+      selfPersonaId: r.selfPersonaId,
+    });
+    setRooms((cur) => cur.map((x) => (x.id === updated.id ? updated : x)));
+    if (room?.id === updated.id) setRoom(updated);
+  };
 
   const startEdit = (m: Message) =>
     setEditing({
@@ -755,7 +787,14 @@ function TalkmakerInner() {
           {rooms.map((r) => (
             <div
               key={r.id}
-              className={`group flex w-full items-center gap-2 rounded-lg px-3 py-2 transition-colors ${
+              onTouchStart={() => startRoomPress(r)}
+              onTouchEnd={cancelPress}
+              onTouchMove={cancelPress}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setRoomAction(r);
+              }}
+              className={`group flex w-full select-none items-center gap-2 rounded-lg px-3 py-2 transition-colors [-webkit-touch-callout:none] ${
                 room?.id === r.id
                   ? "bg-[var(--hover-strong)]"
                   : "hover:bg-[var(--hover)]"
@@ -1127,7 +1166,13 @@ function TalkmakerInner() {
                 })}
               </div>
             )}
-            {pending && (
+            {uploading && (
+              <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2.5 text-[var(--muted)]">
+                <Spinner size={14} />
+                <span className="font-mono text-[11px]">업로드 중…</span>
+              </div>
+            )}
+            {!uploading && pending && (
               <div className="mb-3 inline-flex max-w-full items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1.5">
                 {pending.type.startsWith("image/") ? (
                   <img
@@ -1178,7 +1223,7 @@ function TalkmakerInner() {
                 className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-[var(--line)] bg-[var(--bg-2)] text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30"
               >
                 {uploading ? (
-                  <span className="animate-pulse">…</span>
+                  <Spinner size={16} />
                 ) : (
                   <IconPaperclip size={18} />
                 )}
@@ -1249,6 +1294,11 @@ function TalkmakerInner() {
       )}
       {actionMsg && (
         <ActionSheet
+          canCopy={!!actionMsg.content.trim()}
+          onCopy={() => {
+            navigator.clipboard?.writeText(actionMsg.content).catch(() => {});
+            setActionMsg(null);
+          }}
           onEdit={() => {
             startEdit(actionMsg);
             setActionMsg(null);
@@ -1273,26 +1323,44 @@ function TalkmakerInner() {
           onClose={() => setQuickPersona(null)}
         />
       )}
+      {roomAction && (
+        <RoomActionSheet
+          title={roomAction.title}
+          onRename={() => {
+            const r = roomAction;
+            setRoomAction(null);
+            renameRoom(r);
+          }}
+          onDelete={() => {
+            const r = roomAction;
+            setRoomAction(null);
+            removeRoom(r);
+          }}
+          onClose={() => setRoomAction(null)}
+        />
+      )}
     </main>
   );
 }
 
-// Bottom-sheet message actions for touch (long-press) — edit / delete.
-function ActionSheet({
-  onEdit,
+// Bottom-sheet room actions for touch (long-press) — rename / delete.
+function RoomActionSheet({
+  title,
+  onRename,
   onDelete,
   onClose,
 }: {
-  onEdit: () => void;
+  title: string;
+  onRename: () => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/55 sm:items-center sm:p-4"
+    <button
+      type="button"
+      aria-label="닫기"
       onClick={onClose}
-      // biome-ignore lint/a11y/noStaticElementInteractions: backdrop close
-      role="presentation"
+      className="fixed inset-0 z-[120] flex touch-none items-end justify-center bg-black/55 sm:items-center sm:p-4"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -1300,6 +1368,65 @@ function ActionSheet({
         role="presentation"
         className="pb-safe sheet-up w-full max-w-sm overflow-hidden rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-2 shadow-2xl sm:rounded-2xl"
       >
+        <div className="truncate px-4 py-2 font-mono text-[10px] tracking-[0.2em] text-[var(--muted)]">
+          {title}
+        </div>
+        <button
+          type="button"
+          onClick={onRename}
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] hover:bg-[var(--hover)]"
+        >
+          <IconPencil size={16} /> 이름 변경
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] text-[#ff5e3a] hover:bg-[var(--hover)]"
+        >
+          <IconTrash size={16} /> 삭제
+        </button>
+      </div>
+    </button>
+  );
+}
+
+// Bottom-sheet message actions for touch (long-press) — copy / edit / delete.
+function ActionSheet({
+  canCopy,
+  onCopy,
+  onEdit,
+  onDelete,
+  onClose,
+}: {
+  canCopy: boolean;
+  onCopy: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label="닫기"
+      onClick={onClose}
+      // touch-none stops the backdrop/page from being dragged while open.
+      className="fixed inset-0 z-[120] flex touch-none items-end justify-center bg-black/55 sm:items-center sm:p-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
+        role="presentation"
+        className="pb-safe sheet-up w-full max-w-sm overflow-hidden rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-2 shadow-2xl sm:rounded-2xl"
+      >
+        {canCopy && (
+          <button
+            type="button"
+            onClick={onCopy}
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] hover:bg-[var(--hover)]"
+          >
+            <IconCopy size={16} /> 텍스트 복사
+          </button>
+        )}
         <button
           type="button"
           onClick={onEdit}
@@ -1315,7 +1442,7 @@ function ActionSheet({
           <IconTrash size={16} /> 삭제
         </button>
       </div>
-    </div>
+    </button>
   );
 }
 
