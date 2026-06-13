@@ -31,9 +31,6 @@ export default async function LabPlaceholder({
         <h1 className="font-display mt-3 text-6xl leading-[0.95] md:text-8xl">
           {lab.title}
         </h1>
-        <p className="mx-auto mt-5 max-w-sm font-mono text-[13px] leading-relaxed text-[var(--muted)]">
-          {lab.blurb}
-        </p>
         <div
           className="mt-7 inline-block border px-4 py-2 font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]"
           style={{ borderColor: "var(--line)" }}

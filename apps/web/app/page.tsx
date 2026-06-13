@@ -66,9 +66,6 @@ export default function Home() {
             <h1 className="font-display mt-2 text-4xl leading-[0.95] sm:text-5xl md:text-7xl">
               {lab.title}
             </h1>
-            <p className="mt-4 max-w-md font-mono text-[12px] leading-relaxed text-[var(--muted)] md:text-[13px]">
-              {lab.blurb}
-            </p>
             <Link
               href={`/lab/${lab.slug}`}
               className="pointer-events-auto group mt-6 inline-flex items-center gap-3 border border-[var(--line)] bg-black/30 px-5 py-3 backdrop-blur-sm transition-colors hover:border-[var(--fg)]"
