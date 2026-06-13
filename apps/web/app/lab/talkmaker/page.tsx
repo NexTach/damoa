@@ -684,7 +684,7 @@ function TalkmakerInner() {
 
   return (
     <main
-      className="flex overflow-hidden bg-[var(--bg)] text-[var(--fg)]"
+      className="fixed inset-x-0 top-0 flex overflow-hidden overscroll-none bg-[var(--bg)] text-[var(--fg)]"
       style={{ height: "var(--app-h, 100dvh)" }}
     >
       {/* 사이드바 — 모바일에선 방이 열리면 숨기고 채팅을 전체폭으로 */}
@@ -883,7 +883,7 @@ function TalkmakerInner() {
           <div
             ref={scrollRef}
             onScroll={onMessagesScroll}
-            className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6"
+            className="flex-1 overflow-y-auto overscroll-contain px-4 py-5 md:px-6 md:py-6"
           >
             {loadingOlder && (
               <div className="mb-2 text-center font-mono text-[10px] tracking-[0.2em] text-[var(--muted)]">
