@@ -35,6 +35,7 @@ class MessageController(private val service: MessageService) {
         @RequestParam(required = false) personaId: Long?,
         @RequestParam(required = false) after: Long?,
         @RequestParam(required = false) before: Long?,
+        @RequestParam(required = false) cursor: String?,
     ): SearchResult = service.search(
         currentUserId(),
         roomId,
@@ -42,6 +43,7 @@ class MessageController(private val service: MessageService) {
         personaId,
         after?.let(Instant::ofEpochMilli),
         before?.let(Instant::ofEpochMilli),
+        cursor,
     )
 
     @PostMapping

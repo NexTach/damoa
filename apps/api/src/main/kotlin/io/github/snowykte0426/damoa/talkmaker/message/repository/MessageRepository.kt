@@ -61,6 +61,8 @@ interface MessageRepository : JpaRepository<Message, Long> {
           and (:personaId is null or m.personaId = :personaId)
           and (:after is null or m.sentAt >= :after)
           and (:before is null or m.sentAt <= :before)
+          and (:cursorTs is null or m.sentAt < :cursorTs
+               or (m.sentAt = :cursorTs and m.id < :cursorId))
         order by m.sentAt desc, m.id desc
         """,
     )
@@ -70,6 +72,8 @@ interface MessageRepository : JpaRepository<Message, Long> {
         @Param("personaId") personaId: Long?,
         @Param("after") after: Instant?,
         @Param("before") before: Instant?,
+        @Param("cursorTs") cursorTs: Instant?,
+        @Param("cursorId") cursorId: Long?,
         pageable: Pageable,
     ): List<Message>
 

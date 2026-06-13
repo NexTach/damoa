@@ -4,9 +4,9 @@ import { useState } from "react";
 import {
   isAuthError,
   type Message,
+  type MessageFilter,
   type Persona,
   searchMessages,
-  type SearchResult,
 } from "@/lib/talkmaker";
 import { IconSearch, IconX } from "./icons";
 
@@ -59,25 +59,62 @@ export default function TalkSearch({
   const [personaId, setPersonaId] = useState<number | null>(null);
   const [after, setAfter] = useState("");
   const [before, setBefore] = useState("");
-  const [result, setResult] = useState<SearchResult | null>(null);
+  const [items, setItems] = useState<Message[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [more, setMore] = useState(false);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
+
+  const filter = (): MessageFilter => ({
+    q: q.trim() || undefined,
+    personaId: personaId ?? undefined,
+    after: after ? dayStart(after) : undefined,
+    before: before ? dayEnd(before) : undefined,
+  });
 
   const run = async () => {
     setLoading(true);
     try {
-      const r = await searchMessages(roomId, {
-        q: q.trim() || undefined,
-        personaId: personaId ?? undefined,
-        after: after ? dayStart(after) : undefined,
-        before: before ? dayEnd(before) : undefined,
-      });
-      setResult(r);
+      const r = await searchMessages(roomId, filter());
+      setItems(r.messages);
+      setTotal(r.total);
+      setCursor(r.nextCursor);
+      setMore(r.hasMore);
     } catch (e) {
-      if (!isAuthError(e)) setResult({ messages: [], total: 0, capped: false });
+      if (!isAuthError(e)) {
+        setItems([]);
+        setTotal(0);
+        setMore(false);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMore = async () => {
+    if (!cursor || loading) return;
+    setLoading(true);
+    try {
+      const r = await searchMessages(roomId, { ...filter(), cursor });
+      setItems((cur) => [...(cur ?? []), ...r.messages]);
+      setCursor(r.nextCursor);
+      setMore(r.hasMore);
+    } catch {
+      // ignore; keep what we have
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onResultsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (
+      el.scrollHeight - el.scrollTop - el.clientHeight < 120 &&
+      more &&
+      !loading
+    )
+      loadMore();
   };
 
   const snippet = (m: Message) =>
@@ -191,19 +228,18 @@ export default function TalkSearch({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3">
-          {result && (
+        <div className="flex-1 overflow-y-auto p-3" onScroll={onResultsScroll}>
+          {items && (
             <div className="px-2 pb-2 font-mono text-[10px] tracking-[0.2em] text-[var(--muted)]">
-              {result.total.toLocaleString()}건
-              {result.capped && " (상위 100건 표시 — 조건을 좁혀보세요)"}
+              {total.toLocaleString()}건
             </div>
           )}
-          {result?.messages.length === 0 && (
+          {items?.length === 0 && (
             <p className="px-2 py-6 text-center font-mono text-[12px] text-[var(--muted)]">
               결과 없음
             </p>
           )}
-          {result?.messages.map((m) => {
+          {items?.map((m) => {
             const p = personaBy(m.personaId);
             return (
               <button
@@ -227,6 +263,11 @@ export default function TalkSearch({
               </button>
             );
           })}
+          {items && items.length > 0 && more && (
+            <div className="py-3 text-center font-mono text-[10px] tracking-[0.2em] text-[var(--muted)]">
+              {loading ? "불러오는 중…" : "스크롤하여 더 보기"}
+            </div>
+          )}
         </div>
       </div>
     </div>

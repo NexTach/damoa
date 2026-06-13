@@ -20,6 +20,7 @@ interface MessageService {
         personaId: Long?,
         after: Instant?,
         before: Instant?,
+        cursor: String?,
     ): SearchResult
 
     fun create(ownerId: Long, roomId: Long, req: MessageRequest): MessageResponse

@@ -23,7 +23,7 @@ class MessageServiceImpl(
     props: AppProperties,
 ) : MessageService {
     private val publicBase = props.s3.publicBase
-    private val searchCap = 100
+    private val searchPageSize = 30
 
     @Transactional(readOnly = true)
     override fun list(ownerId: Long, roomId: Long, limit: Int, before: String?, at: Long?): MessagePage {
@@ -55,19 +55,30 @@ class MessageServiceImpl(
         personaId: Long?,
         after: Instant?,
         before: Instant?,
+        cursor: String?,
     ): SearchResult {
         roomService.requireOwned(ownerId, roomId)
         val query = q?.trim()?.ifBlank { null }
+        val cur = cursor?.let { decodeCursor(it) }
         val rows = repository.search(
             roomId,
             query,
             personaId,
             after,
             before,
-            PageRequest.of(0, searchCap),
+            cur?.first,
+            cur?.second,
+            PageRequest.of(0, searchPageSize + 1),
         )
+        val hasMore = rows.size > searchPageSize
+        val page = rows.take(searchPageSize)
+        val nextCursor = if (hasMore && page.isNotEmpty()) {
+            page.last().let { encodeCursor(it.sentAt, it.id) }
+        } else {
+            null
+        }
         val total = repository.searchCount(roomId, query, personaId, after, before)
-        return SearchResult(rows.map { it.toResponse(publicBase) }, total, total > searchCap)
+        return SearchResult(page.map { it.toResponse(publicBase) }, total, hasMore, nextCursor)
     }
 
     private fun encodeCursor(ts: Instant, id: Long) = "${ts.toEpochMilli()}_$id"

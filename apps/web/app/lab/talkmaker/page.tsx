@@ -299,6 +299,7 @@ function TalkmakerInner() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [jumped, setJumped] = useState(false);
+  const [atBottom, setAtBottom] = useState(true);
   const [highlightId, setHighlightId] = useState<number | null>(null);
   const scrollToId = useRef<number | null>(null);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
@@ -325,6 +326,18 @@ function TalkmakerInner() {
       document.documentElement.style.removeProperty("--app-h");
     };
   }, []);
+
+  // Lock document scroll in the chat view so focusing the input / opening the
+  // keyboard can't scroll the whole page (the message list is the only scroller).
+  useEffect(() => {
+    if (status !== "ready") return;
+    const el = document.documentElement;
+    const prev = el.style.overflow;
+    el.style.overflow = "hidden";
+    return () => {
+      el.style.overflow = prev;
+    };
+  }, [status]);
 
   const openRoom = useCallback(async (r: Room) => {
     setRoom(r);
@@ -373,7 +386,27 @@ function TalkmakerInner() {
 
   const onMessagesScroll = () => {
     const el = scrollRef.current;
-    if (el && el.scrollTop < 80 && hasMore && !loadingOlder) loadOlder();
+    if (!el) return;
+    if (el.scrollTop < 80 && hasMore && !loadingOlder) loadOlder();
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 120);
+  };
+
+  // Return to the newest messages (reload latest page if we jumped away).
+  const goLatest = async () => {
+    if (!room) return;
+    if (jumped) {
+      setJumped(false);
+      stickBottom.current = true;
+      const page = await listMessages(room.id, { limit: 40 });
+      setMessages(page.messages);
+      setCursor(page.nextCursor);
+      setHasMore(page.hasMore);
+    } else {
+      scrollRef.current?.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   };
 
   useEffect(() => {
@@ -536,14 +569,22 @@ function TalkmakerInner() {
         attachmentType: pending?.type,
         attachmentName: pending?.name ?? undefined,
       });
-      stickBottom.current = true;
-      setMessages((cur) => [...cur, msg]);
       setDraft("");
       if (pending) URL.revokeObjectURL(pending.url);
       setPending(null);
+      stickBottom.current = true;
+      if (jumped) {
+        // Was viewing an old jump window — return to the latest so the sent
+        // message lands at the true bottom with correct context.
+        setJumped(false);
+        const page = await listMessages(room.id, { limit: 40 });
+        setMessages(page.messages);
+        setCursor(page.nextCursor);
+        setHasMore(page.hasMore);
+      } else {
+        setMessages((cur) => [...cur, msg]);
+      }
       refreshRooms();
-      // Keep the keyboard up for continuous typing on mobile.
-      composerRef.current?.focus();
     } finally {
       setSending(false);
     }
@@ -961,16 +1002,18 @@ function TalkmakerInner() {
                           </div>
                         )}
                         {url && <LinkPreview url={url} />}
-                        {(showTime || !capture) && (
-                          <span
-                            className={`mt-1 font-mono text-[9px] text-[var(--muted)] transition-opacity ${
-                              showTime
-                                ? ""
-                                : "opacity-0 group-hover:opacity-100"
-                            }`}
-                          >
+                        {showTime ? (
+                          <span className="mt-1 font-mono text-[9px] text-[var(--muted)]">
                             {timeOf(m.sentAt)}
                           </span>
+                        ) : (
+                          !capture && (
+                            // Hidden (not just transparent) so grouped messages
+                            // stay tight; revealed on hover.
+                            <span className="mt-1 hidden font-mono text-[9px] text-[var(--muted)] group-hover:block">
+                              {timeOf(m.sentAt)}
+                            </span>
+                          )
                         )}
                         {!capture && (
                           <span
@@ -1006,10 +1049,10 @@ function TalkmakerInner() {
             })}
           </div>
 
-          {jumped && (
+          {(jumped || !atBottom) && (
             <button
               type="button"
-              onClick={() => room && openRoom(room)}
+              onClick={goLatest}
               className="-translate-x-1/2 absolute bottom-28 left-1/2 z-10 flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--bg-2)] px-3 py-1.5 font-mono text-[10px] tracking-[0.15em] text-[var(--muted)] shadow-lg hover:text-[var(--fg)]"
             >
               최신 메시지로 ↓
@@ -1127,7 +1170,10 @@ function TalkmakerInner() {
                 type="button"
                 // Keep focus on the textarea so the mobile keyboard stays open.
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={send}
+                onClick={() => {
+                  composerRef.current?.focus();
+                  send();
+                }}
                 disabled={sender == null || busy || (!draft.trim() && !pending)}
                 aria-label="전송"
                 title="전송"

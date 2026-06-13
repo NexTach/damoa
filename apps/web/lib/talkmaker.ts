@@ -114,13 +114,15 @@ export const listMessages = (
 export type SearchResult = {
   messages: Message[];
   total: number;
-  capped: boolean;
+  hasMore: boolean;
+  nextCursor: string | null;
 };
 export type MessageFilter = {
   q?: string;
   personaId?: number;
   after?: number; // epoch millis
   before?: number; // epoch millis
+  cursor?: string;
 };
 export const searchMessages = (roomId: number, f: MessageFilter) => {
   const qs = new URLSearchParams();
@@ -128,6 +130,7 @@ export const searchMessages = (roomId: number, f: MessageFilter) => {
   if (f.personaId != null) qs.set("personaId", String(f.personaId));
   if (f.after != null) qs.set("after", String(f.after));
   if (f.before != null) qs.set("before", String(f.before));
+  if (f.cursor) qs.set("cursor", f.cursor);
   return tm<SearchResult>(`/rooms/${roomId}/messages/search?${qs.toString()}`);
 };
 
