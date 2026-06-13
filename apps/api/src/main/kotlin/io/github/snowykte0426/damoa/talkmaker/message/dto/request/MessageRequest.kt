@@ -8,5 +8,8 @@ data class MessageRequest(
     val attachmentKey: String? = null,
     val attachmentType: String? = null,
     val attachmentName: String? = null,
+    val replyToId: Long? = null,
+    val replyToName: String? = null,
+    val replyToText: String? = null,
     val sentAt: Instant? = null,
 )

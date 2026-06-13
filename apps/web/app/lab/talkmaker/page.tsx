@@ -21,6 +21,7 @@ import {
   IconPaperclip,
   IconPencil,
   IconPlus,
+  IconReply,
   IconSearch,
   IconSend,
   IconSettings,
@@ -105,6 +106,21 @@ const toLocalInput = (iso: string) => {
 
 const URL_RE = /(https?:\/\/[^\s]+)/gi;
 const firstUrl = (s: string) => s.match(/(https?:\/\/[^\s]+)/i)?.[0] ?? null;
+
+// One-line preview of a message (for reply quotes).
+const msgPreview = (m: Message) =>
+  m.content.trim() ||
+  (m.attachmentExpired
+    ? "만료된 파일"
+    : m.attachmentType?.startsWith("image/")
+      ? "사진"
+      : m.attachmentType?.startsWith("video/")
+        ? "동영상"
+        : m.attachmentType?.startsWith("audio/")
+          ? "오디오"
+          : m.attachmentUrl
+            ? "파일"
+            : "메시지");
 
 // Renders message text with clickable links.
 function renderContent(text: string) {
@@ -326,9 +342,11 @@ function TalkmakerInner() {
   const [actionMsg, setActionMsg] = useState<Message | null>(null);
   const [roomAction, setRoomAction] = useState<Room | null>(null);
   const [quickPersona, setQuickPersona] = useState<Persona | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   const scrollToId = useRef<number | null>(null);
   const pressTimer = useRef<number | null>(null);
   const uploadAbort = useRef<AbortController | null>(null);
+  const swipe = useRef<{ x: number; y: number; el: HTMLElement } | null>(null);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -599,8 +617,14 @@ function TalkmakerInner() {
         attachmentKey: pending?.key,
         attachmentType: pending?.type,
         attachmentName: pending?.name ?? undefined,
+        replyToId: replyTo?.id,
+        replyToName: replyTo
+          ? (personaBy(replyTo.personaId)?.name ?? "")
+          : undefined,
+        replyToText: replyTo ? msgPreview(replyTo) : undefined,
       });
       setDraft("");
+      setReplyTo(null);
       if (pending) URL.revokeObjectURL(pending.url);
       setPending(null);
       stickBottom.current = true;
@@ -646,6 +670,42 @@ function TalkmakerInner() {
       pressTimer.current = null;
     }
   };
+
+  const startReply = (m: Message) => {
+    setReplyTo(m);
+    composerRef.current?.focus();
+  };
+
+  // Swipe a bubble sideways to reply (mobile); long-press still opens actions.
+  const onMsgTouchStart = (m: Message, e: React.TouchEvent<HTMLDivElement>) => {
+    startPress(m);
+    const t = e.touches[0];
+    swipe.current = { x: t.clientX, y: t.clientY, el: e.currentTarget };
+  };
+  const onMsgTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const s = swipe.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) cancelPress();
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) {
+      const drag = Math.max(-96, Math.min(96, dx));
+      s.el.style.transition = "none";
+      s.el.style.transform = `translateX(${drag}px)`;
+    }
+  };
+  const onMsgTouchEnd = (m: Message, e: React.TouchEvent<HTMLDivElement>) => {
+    cancelPress();
+    const s = swipe.current;
+    swipe.current = null;
+    if (!s) return;
+    const dx = (e.changedTouches[0]?.clientX ?? s.x) - s.x;
+    s.el.style.transition = "transform .18s";
+    s.el.style.transform = "";
+    if (Math.abs(dx) > 60) startReply(m);
+  };
+
   const startRoomPress = (r: Room) => {
     pressTimer.current = window.setTimeout(() => {
       pressTimer.current = null;
@@ -1016,9 +1076,9 @@ function TalkmakerInner() {
                         </button>
                       ))}
                     <div
-                      onTouchStart={() => startPress(m)}
-                      onTouchEnd={cancelPress}
-                      onTouchMove={cancelPress}
+                      onTouchStart={(e) => onMsgTouchStart(m, e)}
+                      onTouchMove={onMsgTouchMove}
+                      onTouchEnd={(e) => onMsgTouchEnd(m, e)}
                       onContextMenu={(e) => {
                         if (capture) return;
                         e.preventDefault();
@@ -1030,6 +1090,22 @@ function TalkmakerInner() {
                         <span className="mb-1 font-mono text-[10px] text-[var(--muted)]">
                           {p?.name}
                         </span>
+                      )}
+                      {m.replyToId != null && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            m.replyToId != null && jumpTo(m.replyToId)
+                          }
+                          className="mb-1 max-w-full truncate rounded-lg border-l-2 border-[var(--accent)] bg-[var(--surface)] px-2.5 py-1.5 text-left"
+                        >
+                          <span className="block font-mono text-[9px] text-[var(--muted)]">
+                            ↩ {m.replyToName ?? "메시지"}
+                          </span>
+                          <span className="block truncate text-[11px] text-[var(--muted)]">
+                            {m.replyToText || "메시지"}
+                          </span>
+                        </button>
                       )}
                       {m.attachmentExpired && (
                         <div className="mb-1 flex items-center gap-2 rounded-2xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
@@ -1163,6 +1239,30 @@ function TalkmakerInner() {
 
           {/* 작성 — 입력창은 유지, 캡처 모드에선 페르소나 선택기만 숨김 */}
           <div className="pb-safe border-t border-[var(--line)] px-4 pt-4 md:px-6 md:pb-4">
+            {replyTo && (
+              <div className="mb-3 flex items-center gap-2 rounded-xl border-l-2 border-[var(--accent)] bg-[var(--surface)] px-3 py-2">
+                <IconReply
+                  size={14}
+                  className="shrink-0 text-[var(--accent)]"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-[10px] text-[var(--muted)]">
+                    {personaBy(replyTo.personaId)?.name ?? "메시지"}에게 답장
+                  </div>
+                  <div className="truncate text-[12px] text-[var(--muted)]">
+                    {msgPreview(replyTo)}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyTo(null)}
+                  aria-label="답장 취소"
+                  className="shrink-0 text-[var(--muted)] hover:text-[#ff5e3a]"
+                >
+                  <IconX size={14} />
+                </button>
+              </div>
+            )}
             {!capture && (
               <div className="mb-3 flex flex-wrap gap-2">
                 {room.participantPersonaIds.length === 0 && (
@@ -1318,6 +1418,10 @@ function TalkmakerInner() {
       {actionMsg && (
         <ActionSheet
           canCopy={!!actionMsg.content.trim()}
+          onReply={() => {
+            startReply(actionMsg);
+            setActionMsg(null);
+          }}
           onCopy={() => {
             navigator.clipboard?.writeText(actionMsg.content).catch(() => {});
             setActionMsg(null);
@@ -1431,12 +1535,14 @@ function RoomActionSheet({
 // Bottom-sheet message actions for touch (long-press) — copy / edit / delete.
 function ActionSheet({
   canCopy,
+  onReply,
   onCopy,
   onEdit,
   onDelete,
   onClose,
 }: {
   canCopy: boolean;
+  onReply: () => void;
   onCopy: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -1456,6 +1562,13 @@ function ActionSheet({
         role="presentation"
         className="pb-safe sheet-up w-full max-w-sm overflow-hidden rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-2 shadow-2xl sm:rounded-2xl"
       >
+        <button
+          type="button"
+          onClick={onReply}
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] hover:bg-[var(--hover)]"
+        >
+          <IconReply size={16} /> 답장
+        </button>
         {canCopy && (
           <button
             type="button"

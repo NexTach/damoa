@@ -32,6 +32,9 @@ export type Message = {
   attachmentType: string | null;
   attachmentName: string | null;
   attachmentExpired: boolean;
+  replyToId: number | null;
+  replyToName: string | null;
+  replyToText: string | null;
   sentAt: string;
 };
 
@@ -156,6 +159,9 @@ export const createMessage = (
     attachmentKey?: string;
     attachmentType?: string;
     attachmentName?: string;
+    replyToId?: number;
+    replyToName?: string;
+    replyToText?: string;
     sentAt?: string;
   },
 ) =>

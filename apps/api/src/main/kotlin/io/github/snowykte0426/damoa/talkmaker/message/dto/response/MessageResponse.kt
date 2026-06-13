@@ -11,6 +11,9 @@ data class MessageResponse(
     val attachmentType: String?,
     val attachmentName: String?,
     val attachmentExpired: Boolean,
+    val replyToId: Long?,
+    val replyToName: String?,
+    val replyToText: String?,
     val sentAt: Instant,
 )
 
@@ -23,5 +26,8 @@ fun Message.toResponse(publicBase: String) = MessageResponse(
     attachmentType = attachmentType,
     attachmentName = if (!attachmentExpired) attachmentName else null,
     attachmentExpired = attachmentExpired,
+    replyToId = replyToId,
+    replyToName = replyToName,
+    replyToText = replyToText,
     sentAt = sentAt,
 )

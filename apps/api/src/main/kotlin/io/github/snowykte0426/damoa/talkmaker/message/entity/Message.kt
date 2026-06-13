@@ -21,6 +21,10 @@ open class Message(
     open var attachmentType: String? = null, // attachment mime type
     open var attachmentName: String? = null, // original file name (for non-media files)
     open var attachmentExpired: Boolean = false, // true after the file was auto-purged
+    open var replyToId: Long? = null, // message this one replies to
+    open var replyToName: String? = null, // snapshot: replied persona name
+    @Column(columnDefinition = "TEXT")
+    open var replyToText: String? = null, // snapshot: replied message preview
     open var sentAt: Instant = Instant.now(), // editable display time, used for ordering
     open var createdAt: Instant = Instant.now(),
 )

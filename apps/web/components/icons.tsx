@@ -124,6 +124,15 @@ export function IconDownload({ size = 16, className }: IconProps) {
   );
 }
 
+export function IconReply({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden>
+      <path d="M9 17l-5-5 5-5" />
+      <path d="M4 12h11a5 5 0 0 1 5 5v2" />
+    </svg>
+  );
+}
+
 export function IconCopy({ size = 16, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden>
