@@ -1,6 +1,6 @@
 package io.github.snowykte0426.damoa.config
 
-import io.github.snowykte0426.damoa.auth.JwtAuthFilter
+import io.github.snowykte0426.damoa.auth.filter.JwtAuthFilter
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
