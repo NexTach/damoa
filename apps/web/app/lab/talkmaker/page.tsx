@@ -284,6 +284,23 @@ function TalkmakerInner() {
   const fileRef = useRef<HTMLInputElement>(null);
   const busy = sending || uploading;
 
+  // Track the visual viewport so the layout fits above the mobile keyboard
+  // (keeps the header/title fixed instead of scrolling out of view).
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const set = () =>
+      document.documentElement.style.setProperty("--app-h", `${vv.height}px`);
+    set();
+    vv.addEventListener("resize", set);
+    vv.addEventListener("scroll", set);
+    return () => {
+      vv.removeEventListener("resize", set);
+      vv.removeEventListener("scroll", set);
+      document.documentElement.style.removeProperty("--app-h");
+    };
+  }, []);
+
   const openRoom = useCallback(async (r: Room) => {
     setRoom(r);
     setSettingsOpen(false);
@@ -544,7 +561,10 @@ function TalkmakerInner() {
   }
 
   return (
-    <main className="flex h-dvh bg-[var(--bg)] text-[var(--fg)]">
+    <main
+      className="flex overflow-hidden bg-[var(--bg)] text-[var(--fg)]"
+      style={{ height: "var(--app-h, 100dvh)" }}
+    >
       {/* 사이드바 — 모바일에선 방이 열리면 숨기고 채팅을 전체폭으로 */}
       <aside
         className={`${room ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-[var(--line)] bg-[var(--bg-2)] md:w-72`}
@@ -747,7 +767,7 @@ function TalkmakerInner() {
               return (
                 <div
                   key={m.id}
-                  className={`group relative flex items-start gap-2 ${grouped ? "mt-0.5" : "mt-4"} ${mine ? "flex-row-reverse" : ""}`}
+                  className={`group relative flex items-start gap-2 ${grouped ? "mt-2" : "mt-5"} ${mine ? "flex-row-reverse" : ""}`}
                 >
                   {!mine &&
                     (grouped ? (
