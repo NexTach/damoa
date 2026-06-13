@@ -433,24 +433,24 @@ function TalkmakerInner() {
 
   if (status === "anon") {
     return (
-      <main className="grid h-dvh place-items-center bg-[var(--bg)] p-6">
+      <main className="grid min-h-dvh place-items-center bg-[var(--bg)] px-6 py-10">
         <div className="w-full max-w-sm text-center">
           <div
-            className="font-mono text-xs tracking-[0.3em]"
+            className="font-mono text-[11px] tracking-[0.3em] sm:text-xs"
             style={{ color: "#27e8a7" }}
           >
             05 — TALKMAKER
           </div>
-          <h1 className="font-display mt-3 text-5xl leading-[0.95]">
+          <h1 className="font-display mt-3 text-[clamp(2.5rem,14vw,3.5rem)] leading-[0.95]">
             Talkmaker
           </h1>
-          <p className="mt-4 font-mono text-[13px] leading-relaxed text-[var(--muted)]">
+          <p className="mx-auto mt-4 max-w-xs font-mono text-[12px] leading-relaxed text-[var(--muted)] sm:text-[13px]">
             페르소나를 만들고, 직접 대사를 이어 붙여 연출된 대화를 만드세요.
             계정마다 따로 보관됩니다.
           </p>
           <a
             href={loginUrl()}
-            className="mt-8 inline-flex items-center gap-3 rounded-full bg-[var(--fg)] px-6 py-3 font-mono text-xs tracking-[0.2em] text-[var(--bg)] transition-transform hover:scale-[1.03]"
+            className="mt-8 inline-flex w-full items-center justify-center gap-3 rounded-full bg-[var(--fg)] px-6 py-3.5 font-mono text-xs tracking-[0.2em] text-[var(--bg)] transition-transform hover:scale-[1.03] sm:w-auto"
           >
             DataGSM 로그인 →
           </a>
@@ -783,7 +783,7 @@ function TalkmakerInner() {
           </div>
 
           {/* 작성 — 입력창은 유지, 캡처 모드에선 페르소나 선택기만 숨김 */}
-          <div className="border-t border-[var(--line)] px-4 py-4 md:px-6">
+          <div className="pb-safe border-t border-[var(--line)] px-4 pt-4 md:px-6 md:pb-4">
             {!capture && (
               <div className="mb-3 flex flex-wrap gap-2">
                 {room.participantPersonaIds.length === 0 && (
@@ -1079,7 +1079,7 @@ function RoomSettings({
         onClick={onClose}
         className="absolute inset-0 bg-black/40 md:hidden"
       />
-      <div className="sheet-up absolute inset-x-0 bottom-0 max-h-[80vh] overflow-y-auto rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-4 pb-6 shadow-2xl md:static md:max-h-none md:w-72 md:rounded-xl md:pb-4">
+      <div className="pb-safe sheet-up absolute inset-x-0 bottom-0 max-h-[80vh] overflow-y-auto rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-4 shadow-2xl md:static md:max-h-none md:w-72 md:rounded-xl">
         <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--line)] md:hidden" />
         <div className="flex items-center justify-between pb-1">
           <span className="font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
@@ -1318,7 +1318,7 @@ function PersonaModal({
             onAdd(name);
             setName("");
           }}
-          className="flex gap-2 border-t border-[var(--line)] px-5 py-4"
+          className="pb-safe flex gap-2 border-t border-[var(--line)] px-5 pt-4"
         >
           <input
             value={name}

@@ -121,8 +121,29 @@ function PosterCard({
   );
 }
 
+// Pulls the camera back on small / portrait viewports so the ring never clips.
+function Rig() {
+  const camera = useThree((s) => s.camera);
+  const size = useThree((s) => s.size);
+  useEffect(() => {
+    const portrait = size.height >= size.width;
+    const small = size.width < 768;
+    const z = small ? (portrait ? 13 : 11) : 9.5;
+    camera.position.set(0, 0, z);
+    camera.updateProjectionMatrix();
+  }, [camera, size]);
+  return null;
+}
+
 function Wheel({ onActive }: { onActive: (i: number) => void }) {
-  const { gl } = useThree();
+  const { gl, size } = useThree();
+  const portrait = size.height >= size.width;
+  const small = size.width < 768;
+  // On mobile, shrink the ring and lift it into the upper area so the
+  // text overlay below stays readable.
+  const fit = small ? (portrait ? 0.72 : 0.85) : 1;
+  const gx = small ? 0 : X_OFFSET;
+  const gy = small ? (portrait ? 1.4 : -0.6) : Y_OFFSET;
   const offset = useRef(0);
   const vel = useRef(0);
   const dragging = useRef(false);
@@ -134,6 +155,7 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
   useEffect(() => {
     const el = gl.domElement;
     el.style.cursor = "grab";
+    el.style.touchAction = "none"; // let the canvas own touch drags (no page scroll)
     const down = (e: PointerEvent) => {
       dragging.current = true;
       lastX.current = e.clientX;
@@ -189,7 +211,7 @@ function Wheel({ onActive }: { onActive: (i: number) => void }) {
   });
 
   return (
-    <group position={[X_OFFSET, Y_OFFSET, 0]}>
+    <group position={[gx, gy, 0]} scale={fit}>
       {LABS.map((lab, i) => (
         <PosterCard
           key={lab.slug}
@@ -225,7 +247,12 @@ export default function PosterWheel({
       <fog attach="fog" args={["#08080a", 6, 13.5]} />
       <ambientLight intensity={1.1} />
       <directionalLight position={[3, 5, 6]} intensity={1.2} />
-      <directionalLight position={[-4, -2, 1]} intensity={0.4} color="#6f8cff" />
+      <directionalLight
+        position={[-4, -2, 1]}
+        intensity={0.4}
+        color="#6f8cff"
+      />
+      <Rig />
       <Wheel onActive={onActiveChange} />
     </Canvas>
   );

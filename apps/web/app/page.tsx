@@ -30,8 +30,11 @@ export default function Home() {
         <PosterWheel onActiveChange={setActive} />
       </div>
 
+      {/* 하단 스크림 — 모바일에서 텍스트 가독성 확보 */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t from-[var(--bg)] via-[var(--bg)]/80 to-transparent md:h-[42%] md:via-[var(--bg)]/40" />
+
       {/* HTML 오버레이 */}
-      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-6 md:p-9">
+      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-5 md:p-9">
         {/* 헤더 */}
         <header className="flex items-start justify-between">
           <div className="rise">
@@ -60,10 +63,10 @@ export default function Home() {
             >
               {lab.index} — {lab.tag.toUpperCase()}
             </div>
-            <h1 className="font-display mt-2 text-5xl leading-[0.95] md:text-7xl">
+            <h1 className="font-display mt-2 text-4xl leading-[0.95] sm:text-5xl md:text-7xl">
               {lab.title}
             </h1>
-            <p className="mt-4 max-w-md font-mono text-[13px] leading-relaxed text-[var(--muted)]">
+            <p className="mt-4 max-w-md font-mono text-[12px] leading-relaxed text-[var(--muted)] md:text-[13px]">
               {lab.blurb}
             </p>
             <Link

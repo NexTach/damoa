@@ -100,7 +100,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
             aria-modal
             onClick={(e) => e.stopPropagation()}
             // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
-            className="sheet-up relative w-full max-w-sm rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-5 shadow-2xl sm:rounded-2xl"
+            className="pb-safe sheet-up relative w-full max-w-sm rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-5 shadow-2xl sm:rounded-2xl"
           >
             <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--line)] sm:hidden" />
             {req.title && (
