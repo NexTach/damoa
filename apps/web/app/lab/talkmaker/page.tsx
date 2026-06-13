@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -78,6 +79,16 @@ const timeOf = (iso: string) =>
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  });
+
+// Local calendar-day key + full date label (year included) for date dividers.
+const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
+const dateLabel = (iso: string) =>
+  new Date(iso).toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
   });
 
 // Break a message group when the same persona pauses longer than this.
@@ -317,6 +328,7 @@ function TalkmakerInner() {
   const [quickPersona, setQuickPersona] = useState<Persona | null>(null);
   const scrollToId = useRef<number | null>(null);
   const pressTimer = useRef<number | null>(null);
+  const uploadAbort = useRef<AbortController | null>(null);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -549,9 +561,11 @@ function TalkmakerInner() {
   const pickFile = async (file: File | null) => {
     if (!file || uploading) return;
     if (pending) URL.revokeObjectURL(pending.url);
+    const ac = new AbortController();
+    uploadAbort.current = ac;
     setUploading(true);
     try {
-      const { key, type, name } = await uploadAttachment(file);
+      const { key, type, name } = await uploadAttachment(file, ac.signal);
       setPending({
         key,
         type,
@@ -559,7 +573,8 @@ function TalkmakerInner() {
         url: URL.createObjectURL(file),
       });
     } catch (e) {
-      if (isAuthError(e)) return;
+      // Cancelled by the user, or auth handled elsewhere — stay silent.
+      if ((e as Error)?.name === "AbortError" || isAuthError(e)) return;
       dialog.alert(
         e instanceof FileTooLargeError
           ? "파일이 너무 커요. 더 작은 파일로 보내주세요."
@@ -567,6 +582,7 @@ function TalkmakerInner() {
         "첨부 실패",
       );
     } finally {
+      uploadAbort.current = null;
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
@@ -969,155 +985,168 @@ function TalkmakerInner() {
               // Show the timestamp only on the last bubble of a group.
               const showTime = !sameAsNext;
               const url = m.content ? firstUrl(m.content) : null;
+              // Date divider before the first message of each calendar day.
+              const showDate =
+                !prev || dayKey(prev.sentAt) !== dayKey(m.sentAt);
               return (
-                <div
-                  key={m.id}
-                  data-mid={m.id}
-                  className={`group relative flex items-start gap-2 rounded-2xl ${grouped ? "mt-0.5" : "mt-4"} ${mine ? "flex-row-reverse" : ""} ${highlightId === m.id ? "bg-[var(--accent)]/15 ring-1 ring-[var(--accent)] transition-colors" : "transition-colors"}`}
-                >
-                  {!mine &&
-                    (grouped ? (
-                      <div className="w-7 shrink-0" />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => p && setQuickPersona(p)}
-                        aria-label={`${p?.name ?? "페르소나"} 편집`}
-                        title="페르소나 편집"
-                        className="shrink-0 rounded-full transition-opacity hover:opacity-80"
-                      >
-                        <Avatar persona={p} size={28} />
-                      </button>
-                    ))}
-                  <div
-                    onTouchStart={() => startPress(m)}
-                    onTouchEnd={cancelPress}
-                    onTouchMove={cancelPress}
-                    onContextMenu={(e) => {
-                      if (capture) return;
-                      e.preventDefault();
-                      setActionMsg(m);
-                    }}
-                    className={`flex max-w-[68%] select-none flex-col [-webkit-touch-callout:none] ${mine ? "items-end text-right" : "items-start"}`}
-                  >
-                    {!mine && !grouped && (
-                      <span className="mb-1 font-mono text-[10px] text-[var(--muted)]">
-                        {p?.name}
+                <Fragment key={m.id}>
+                  {showDate && (
+                    <div className="my-4 flex items-center justify-center">
+                      <span className="rounded-full bg-[var(--surface)] px-3 py-1 font-mono text-[10px] tracking-[0.1em] text-[var(--muted)]">
+                        {dateLabel(m.sentAt)}
                       </span>
-                    )}
-                    {m.attachmentExpired && (
-                      <div className="mb-1 flex items-center gap-2 rounded-2xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
-                        <IconTrash size={13} /> 만료된 파일입니다
-                      </div>
-                    )}
-                    {m.attachmentUrl && (
-                      <AttachmentView
-                        url={m.attachmentUrl}
-                        type={m.attachmentType}
-                        name={m.attachmentName}
-                      />
-                    )}
-                    {editing?.id === m.id ? (
-                      <div className="flex w-64 max-w-full flex-col gap-2 rounded-2xl border border-[var(--line)] bg-[var(--bg-2)] p-2 text-left">
-                        <textarea
-                          value={editing.content}
-                          onChange={(e) =>
-                            setEditing(
-                              (s) => s && { ...s, content: e.target.value },
-                            )
-                          }
-                          rows={2}
-                          placeholder="내용"
-                          className="resize-none rounded-lg border border-[var(--line)] bg-transparent px-2 py-1 text-[13px] outline-none placeholder:text-[var(--muted)]"
-                        />
-                        <input
-                          type="datetime-local"
-                          value={editing.at}
-                          onChange={(e) =>
-                            setEditing((s) => s && { ...s, at: e.target.value })
-                          }
-                          className="rounded-lg border border-[var(--line)] bg-transparent px-2 py-1 font-mono text-[11px] outline-none"
-                        />
-                        <div className="flex justify-end gap-1 font-mono text-[10px]">
-                          <button
-                            type="button"
-                            onClick={() => setEditing(null)}
-                            disabled={sending}
-                            className="px-2 py-1 text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-40"
-                          >
-                            취소
-                          </button>
-                          <button
-                            type="button"
-                            onClick={saveEdit}
-                            disabled={sending}
-                            className="rounded-md bg-[var(--fg)] px-3 py-1 text-[var(--bg)] disabled:opacity-40"
-                          >
-                            {sending ? "저장 중…" : "저장"}
-                          </button>
+                    </div>
+                  )}
+                  <div
+                    data-mid={m.id}
+                    className={`group relative flex items-start gap-2 rounded-2xl ${grouped && !showDate ? "mt-0.5" : "mt-4"} ${mine ? "flex-row-reverse" : ""} ${highlightId === m.id ? "bg-[var(--accent)]/15 ring-1 ring-[var(--accent)] transition-colors" : "transition-colors"}`}
+                  >
+                    {!mine &&
+                      (grouped ? (
+                        <div className="w-7 shrink-0" />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => p && setQuickPersona(p)}
+                          aria-label={`${p?.name ?? "페르소나"} 편집`}
+                          title="페르소나 편집"
+                          className="shrink-0 rounded-full transition-opacity hover:opacity-80"
+                        >
+                          <Avatar persona={p} size={28} />
+                        </button>
+                      ))}
+                    <div
+                      onTouchStart={() => startPress(m)}
+                      onTouchEnd={cancelPress}
+                      onTouchMove={cancelPress}
+                      onContextMenu={(e) => {
+                        if (capture) return;
+                        e.preventDefault();
+                        setActionMsg(m);
+                      }}
+                      className={`flex max-w-[68%] select-none flex-col [-webkit-touch-callout:none] ${mine ? "items-end text-right" : "items-start"}`}
+                    >
+                      {!mine && !grouped && (
+                        <span className="mb-1 font-mono text-[10px] text-[var(--muted)]">
+                          {p?.name}
+                        </span>
+                      )}
+                      {m.attachmentExpired && (
+                        <div className="mb-1 flex items-center gap-2 rounded-2xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
+                          <IconTrash size={13} /> 만료된 파일입니다
                         </div>
-                      </div>
-                    ) : (
-                      <>
-                        {m.content && (
-                          <div
-                            className="whitespace-pre-wrap break-words rounded-2xl px-4 py-2 text-[14px] leading-relaxed"
-                            style={
-                              mine
-                                ? { background: "#27e8a7", color: "#04130d" }
-                                : {
-                                    background: "var(--surface)",
-                                    color: "var(--fg)",
-                                  }
+                      )}
+                      {m.attachmentUrl && (
+                        <AttachmentView
+                          url={m.attachmentUrl}
+                          type={m.attachmentType}
+                          name={m.attachmentName}
+                        />
+                      )}
+                      {editing?.id === m.id ? (
+                        <div className="flex w-64 max-w-full flex-col gap-2 rounded-2xl border border-[var(--line)] bg-[var(--bg-2)] p-2 text-left">
+                          <textarea
+                            value={editing.content}
+                            onChange={(e) =>
+                              setEditing(
+                                (s) => s && { ...s, content: e.target.value },
+                              )
                             }
-                          >
-                            {renderContent(m.content)}
+                            rows={2}
+                            placeholder="내용"
+                            className="resize-none rounded-lg border border-[var(--line)] bg-transparent px-2 py-1 text-[13px] outline-none placeholder:text-[var(--muted)]"
+                          />
+                          <input
+                            type="datetime-local"
+                            value={editing.at}
+                            onChange={(e) =>
+                              setEditing(
+                                (s) => s && { ...s, at: e.target.value },
+                              )
+                            }
+                            className="rounded-lg border border-[var(--line)] bg-transparent px-2 py-1 font-mono text-[11px] outline-none"
+                          />
+                          <div className="flex justify-end gap-1 font-mono text-[10px]">
+                            <button
+                              type="button"
+                              onClick={() => setEditing(null)}
+                              disabled={sending}
+                              className="px-2 py-1 text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-40"
+                            >
+                              취소
+                            </button>
+                            <button
+                              type="button"
+                              onClick={saveEdit}
+                              disabled={sending}
+                              className="rounded-md bg-[var(--fg)] px-3 py-1 text-[var(--bg)] disabled:opacity-40"
+                            >
+                              {sending ? "저장 중…" : "저장"}
+                            </button>
                           </div>
-                        )}
-                        {url && <LinkPreview url={url} />}
-                        {showTime ? (
-                          <span className="mt-1 font-mono text-[9px] text-[var(--muted)]">
-                            {timeOf(m.sentAt)}
-                          </span>
-                        ) : (
-                          !capture && (
-                            // Hidden (not just transparent) so grouped messages
-                            // stay tight; revealed on hover.
-                            <span className="mt-1 hidden font-mono text-[9px] text-[var(--muted)] group-hover:block">
+                        </div>
+                      ) : (
+                        <>
+                          {m.content && (
+                            <div
+                              className="whitespace-pre-wrap break-words rounded-2xl px-4 py-2 text-[14px] leading-relaxed"
+                              style={
+                                mine
+                                  ? { background: "#27e8a7", color: "#04130d" }
+                                  : {
+                                      background: "var(--surface)",
+                                      color: "var(--fg)",
+                                    }
+                              }
+                            >
+                              {renderContent(m.content)}
+                            </div>
+                          )}
+                          {url && <LinkPreview url={url} />}
+                          {showTime ? (
+                            <span className="mt-1 font-mono text-[9px] text-[var(--muted)]">
                               {timeOf(m.sentAt)}
                             </span>
-                          )
-                        )}
-                        {!capture && (
-                          <span
-                            className={`absolute top-0 flex gap-1 text-[var(--muted)] opacity-0 transition-opacity group-hover:opacity-100 ${
-                              mine ? "left-0" : "right-0"
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => startEdit(m)}
-                              aria-label="수정"
-                              title="수정"
-                              className="grid h-6 w-6 place-items-center rounded-full bg-[var(--bg-2)] hover:text-[var(--fg)]"
+                          ) : (
+                            !capture && (
+                              // Hidden (not just transparent) so grouped messages
+                              // stay tight; revealed on hover.
+                              <span className="mt-1 hidden font-mono text-[9px] text-[var(--muted)] group-hover:block">
+                                {timeOf(m.sentAt)}
+                              </span>
+                            )
+                          )}
+                          {!capture && (
+                            <span
+                              className={`absolute top-0 flex gap-1 text-[var(--muted)] opacity-0 transition-opacity group-hover:opacity-100 ${
+                                mine ? "left-0" : "right-0"
+                              }`}
                             >
-                              <IconPencil size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => removeMessage(m.id)}
-                              aria-label="삭제"
-                              title="삭제"
-                              className="grid h-6 w-6 place-items-center rounded-full bg-[var(--bg-2)] hover:text-[#ff5e3a]"
-                            >
-                              <IconTrash size={12} />
-                            </button>
-                          </span>
-                        )}
-                      </>
-                    )}
+                              <button
+                                type="button"
+                                onClick={() => startEdit(m)}
+                                aria-label="수정"
+                                title="수정"
+                                className="grid h-6 w-6 place-items-center rounded-full bg-[var(--bg-2)] hover:text-[var(--fg)]"
+                              >
+                                <IconPencil size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeMessage(m.id)}
+                                aria-label="삭제"
+                                title="삭제"
+                                className="grid h-6 w-6 place-items-center rounded-full bg-[var(--bg-2)] hover:text-[#ff5e3a]"
+                              >
+                                <IconTrash size={12} />
+                              </button>
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </Fragment>
               );
             })}
           </div>
@@ -1164,12 +1193,6 @@ function TalkmakerInner() {
                     </button>
                   );
                 })}
-              </div>
-            )}
-            {uploading && (
-              <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2.5 text-[var(--muted)]">
-                <Spinner size={14} />
-                <span className="font-mono text-[11px]">업로드 중…</span>
               </div>
             )}
             {!uploading && pending && (
@@ -1322,6 +1345,21 @@ function TalkmakerInner() {
           }}
           onClose={() => setQuickPersona(null)}
         />
+      )}
+      {uploading && (
+        <div className="fixed inset-0 z-[140] flex touch-none flex-col items-center justify-center gap-5 bg-[var(--bg)]/92">
+          <Spinner size={40} />
+          <span className="font-mono text-xs tracking-[0.25em] text-[var(--muted)]">
+            업로드 중…
+          </span>
+          <button
+            type="button"
+            onClick={() => uploadAbort.current?.abort()}
+            className="rounded-full border border-[var(--line)] px-5 py-2 font-mono text-xs tracking-[0.2em] text-[var(--muted)] hover:text-[var(--fg)]"
+          >
+            취소
+          </button>
+        </div>
       )}
       {roomAction && (
         <RoomActionSheet

@@ -179,6 +179,7 @@ export class FileTooLargeError extends Error {}
 /** Uploads any file to the storage and returns its key + mime type + name. */
 export const uploadAttachment = async (
   file: File,
+  signal?: AbortSignal,
 ): Promise<{ key: string; type: string; name: string | null }> => {
   const token = getToken();
   const form = new FormData();
@@ -187,6 +188,7 @@ export const uploadAttachment = async (
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
+    signal,
   });
   if (res.status === 401 || res.status === 403)
     throw new AuthError("unauthorized");
