@@ -282,6 +282,7 @@ function TalkmakerInner() {
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const busy = sending || uploading;
 
   // Track the visual viewport so the layout fits above the mobile keyboard
@@ -463,6 +464,8 @@ function TalkmakerInner() {
       if (pending) URL.revokeObjectURL(pending.url);
       setPending(null);
       refreshRooms();
+      // Keep the keyboard up for continuous typing on mobile.
+      composerRef.current?.focus();
     } finally {
       setSending(false);
     }
@@ -767,7 +770,7 @@ function TalkmakerInner() {
               return (
                 <div
                   key={m.id}
-                  className={`group relative flex items-start gap-2 ${grouped ? "mt-2" : "mt-5"} ${mine ? "flex-row-reverse" : ""}`}
+                  className={`group relative flex items-start gap-2 ${grouped ? "mt-0.5" : "mt-4"} ${mine ? "flex-row-reverse" : ""}`}
                 >
                   {!mine &&
                     (grouped ? (
@@ -989,6 +992,7 @@ function TalkmakerInner() {
                 )}
               </button>
               <textarea
+                ref={composerRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
@@ -1006,6 +1010,8 @@ function TalkmakerInner() {
               />
               <button
                 type="button"
+                // Keep focus on the textarea so the mobile keyboard stays open.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={send}
                 disabled={sender == null || busy || (!draft.trim() && !pending)}
                 aria-label="전송"
