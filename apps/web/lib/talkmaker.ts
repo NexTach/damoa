@@ -94,8 +94,56 @@ export const updateRoom = (id: number, body: Partial<Room>) =>
 export const deleteRoom = (id: number) =>
   tm<void>(`/rooms/${id}`, { method: "DELETE" });
 
-export const listMessages = (roomId: number) =>
-  tm<Message[]>(`/rooms/${roomId}/messages`);
+export type MessagePage = {
+  messages: Message[];
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+export const listMessages = (
+  roomId: number,
+  opts?: { limit?: number; before?: string },
+) => {
+  const qs = new URLSearchParams();
+  if (opts?.limit) qs.set("limit", String(opts.limit));
+  if (opts?.before) qs.set("before", opts.before);
+  const q = qs.toString();
+  return tm<MessagePage>(`/rooms/${roomId}/messages${q ? `?${q}` : ""}`);
+};
+
+export type SearchResult = {
+  messages: Message[];
+  total: number;
+  capped: boolean;
+};
+export type MessageFilter = {
+  q?: string;
+  personaId?: number;
+  after?: number; // epoch millis
+  before?: number; // epoch millis
+};
+export const searchMessages = (roomId: number, f: MessageFilter) => {
+  const qs = new URLSearchParams();
+  if (f.q?.trim()) qs.set("q", f.q.trim());
+  if (f.personaId != null) qs.set("personaId", String(f.personaId));
+  if (f.after != null) qs.set("after", String(f.after));
+  if (f.before != null) qs.set("before", String(f.before));
+  return tm<SearchResult>(`/rooms/${roomId}/messages/search?${qs.toString()}`);
+};
+
+export type PersonaStat = {
+  personaId: number;
+  name: string;
+  color: string;
+  count: number;
+};
+export type DayStat = { date: string; count: number };
+export type RoomStats = {
+  total: number;
+  perPersona: PersonaStat[];
+  perDay: DayStat[];
+};
+export const fetchRoomStats = (roomId: number) =>
+  tm<RoomStats>(`/rooms/${roomId}/stats`);
 export const createMessage = (
   roomId: number,
   body: {

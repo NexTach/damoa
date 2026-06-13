@@ -123,3 +123,23 @@ export function IconDownload({ size = 16, className }: IconProps) {
     </svg>
   );
 }
+
+export function IconSearch({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.3-4.3" />
+    </svg>
+  );
+}
+
+export function IconChart({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden>
+      <path d="M3 3v18h18" />
+      <rect x="7" y="11" width="3" height="6" />
+      <rect x="12" y="7" width="3" height="10" />
+      <rect x="17" y="13" width="3" height="4" />
+    </svg>
+  );
+}

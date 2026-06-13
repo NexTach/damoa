@@ -1,22 +1,36 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { DialogProvider, useDialog } from "@/components/dialog";
 import {
   IconArrowLeft,
   IconCamera,
+  IconChart,
   IconDownload,
   IconFile,
   IconPaperclip,
   IconPencil,
   IconPlus,
+  IconSearch,
   IconSend,
   IconSettings,
   IconTrash,
   IconX,
 } from "@/components/icons";
+import TalkSearch from "@/components/talk-search";
 import { ThemeToggle } from "@/components/theme-toggle";
+
+const TalkStats = dynamic(() => import("@/components/talk-stats"), {
+  ssr: false,
+});
 import {
   clearToken,
   createMessage,
@@ -279,10 +293,17 @@ function TalkmakerInner() {
   } | null>(null);
   const [capture, setCapture] = useState(false);
   const [personaModal, setPersonaModal] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const stickBottom = useRef(false);
+  const keepScroll = useRef<number | null>(null);
   const busy = sending || uploading;
 
   // Track the visual viewport so the layout fits above the mobile keyboard
@@ -305,10 +326,37 @@ function TalkmakerInner() {
   const openRoom = useCallback(async (r: Room) => {
     setRoom(r);
     setSettingsOpen(false);
-    const msgs = await listMessages(r.id);
-    setMessages(msgs);
+    setSearchOpen(false);
+    setStatsOpen(false);
+    const page = await listMessages(r.id, { limit: 40 });
+    stickBottom.current = true;
+    setMessages(page.messages);
+    setCursor(page.nextCursor);
+    setHasMore(page.hasMore);
     setSender(r.selfPersonaId ?? r.participantPersonaIds[0] ?? null);
   }, []);
+
+  // Load the previous page when the user scrolls near the top.
+  const loadOlder = useCallback(async () => {
+    if (!room || !cursor || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const page = await listMessages(room.id, { limit: 40, before: cursor });
+      if (page.messages.length) {
+        keepScroll.current = scrollRef.current?.scrollHeight ?? null;
+        setMessages((cur) => [...page.messages, ...cur]);
+      }
+      setCursor(page.nextCursor);
+      setHasMore(page.hasMore);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [room, cursor, loadingOlder]);
+
+  const onMessagesScroll = () => {
+    const el = scrollRef.current;
+    if (el && el.scrollTop < 80 && hasMore && !loadingOlder) loadOlder();
+  };
 
   useEffect(() => {
     if (
@@ -336,12 +384,19 @@ function TalkmakerInner() {
     })();
   }, [openRoom]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 메시지 변경 시 하단 스크롤
-  useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
+  // After messages change: preserve position when prepending older messages,
+  // otherwise stick to the bottom on open/send.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs on messages change
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (keepScroll.current != null) {
+      el.scrollTop = el.scrollHeight - keepScroll.current;
+      keepScroll.current = null;
+    } else if (stickBottom.current) {
+      el.scrollTop = el.scrollHeight;
+      stickBottom.current = false;
+    }
   }, [messages]);
 
   const refreshRooms = async () => setRooms(await listRooms());
@@ -459,6 +514,7 @@ function TalkmakerInner() {
         attachmentType: pending?.type,
         attachmentName: pending?.name ?? undefined,
       });
+      stickBottom.current = true;
       setMessages((cur) => [...cur, msg]);
       setDraft("");
       if (pending) URL.revokeObjectURL(pending.url);
@@ -718,15 +774,35 @@ function TalkmakerInner() {
                 {capture ? <IconX size={18} /> : <IconCamera size={18} />}
               </button>
               {!capture && (
-                <button
-                  type="button"
-                  onClick={() => setSettingsOpen((v) => !v)}
-                  aria-label="참여자 · 설정"
-                  title="참여자 · 설정"
-                  className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
-                >
-                  <IconSettings size={18} />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSearchOpen(true)}
+                    aria-label="검색"
+                    title="검색"
+                    className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+                  >
+                    <IconSearch size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatsOpen(true)}
+                    aria-label="통계"
+                    title="통계"
+                    className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+                  >
+                    <IconChart size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsOpen((v) => !v)}
+                    aria-label="참여자 · 설정"
+                    title="참여자 · 설정"
+                    className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+                  >
+                    <IconSettings size={18} />
+                  </button>
+                </>
               )}
             </div>
           </header>
@@ -743,8 +819,14 @@ function TalkmakerInner() {
           {/* 메시지 */}
           <div
             ref={scrollRef}
+            onScroll={onMessagesScroll}
             className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6"
           >
+            {loadingOlder && (
+              <div className="mb-2 text-center font-mono text-[10px] tracking-[0.2em] text-[var(--muted)]">
+                과거 메시지 불러오는 중…
+              </div>
+            )}
             {messages.length === 0 && (
               <div className="grid h-full place-items-center font-mono text-[11px] tracking-[0.2em] text-[var(--muted)]">
                 아래에서 보낸 사람을 고르고 대사를 입력하세요
@@ -1037,6 +1119,17 @@ function TalkmakerInner() {
           onEdit={editPersona}
           onClose={() => setPersonaModal(false)}
         />
+      )}
+      {searchOpen && room && (
+        <TalkSearch
+          roomId={room.id}
+          personas={personas}
+          participantIds={room.participantPersonaIds}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
+      {statsOpen && room && (
+        <TalkStats roomId={room.id} onClose={() => setStatsOpen(false)} />
       )}
     </main>
   );
