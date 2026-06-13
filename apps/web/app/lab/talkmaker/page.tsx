@@ -1240,13 +1240,13 @@ function TalkmakerInner() {
           {/* 작성 — 입력창은 유지, 캡처 모드에선 페르소나 선택기만 숨김 */}
           <div className="pb-safe border-t border-[var(--line)] px-4 pt-4 md:px-6 md:pb-4">
             {replyTo && (
-              <div className="mb-3 flex items-center gap-2 rounded-xl border-l-2 border-[var(--accent)] bg-[var(--surface)] px-3 py-2">
+              <div className="mb-3 flex items-center gap-2 overflow-hidden rounded-xl border-l-2 border-[var(--accent)] bg-[var(--surface)] px-3 py-2">
                 <IconReply
                   size={14}
                   className="shrink-0 text-[var(--accent)]"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="font-mono text-[10px] text-[var(--muted)]">
+                  <div className="truncate font-mono text-[10px] text-[var(--muted)]">
                     {personaBy(replyTo.personaId)?.name ?? "메시지"}에게 답장
                   </div>
                   <div className="truncate text-[12px] text-[var(--muted)]">
@@ -1368,7 +1368,7 @@ function TalkmakerInner() {
                 // Stay enabled while sending so focus (and the mobile keyboard)
                 // is never lost — enables consecutive sends.
                 disabled={sender == null}
-                className="max-h-32 flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50"
+                className="max-h-32 min-w-0 flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50"
               />
               <button
                 type="button"
