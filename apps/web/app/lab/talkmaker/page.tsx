@@ -915,7 +915,7 @@ function TalkmakerInner() {
         </div>
       ) : (
         <section
-          className="relative flex flex-1 flex-col"
+          className="relative flex min-w-0 flex-1 flex-col"
           onDragEnter={(e) => {
             if (e.dataTransfer.types.includes("Files")) {
               e.preventDefault();
@@ -1016,7 +1016,7 @@ function TalkmakerInner() {
           <div
             ref={scrollRef}
             onScroll={onMessagesScroll}
-            className="flex-1 overflow-y-auto overscroll-contain px-4 py-5 md:px-6 md:py-6"
+            className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-5 md:px-6 md:py-6"
           >
             {loadingOlder && (
               <div className="mb-2 text-center font-mono text-[10px] tracking-[0.2em] text-[var(--muted)]">
@@ -1097,9 +1097,9 @@ function TalkmakerInner() {
                           onClick={() =>
                             m.replyToId != null && jumpTo(m.replyToId)
                           }
-                          className="mb-1 max-w-full truncate rounded-lg border-l-2 border-[var(--accent)] bg-[var(--surface)] px-2.5 py-1.5 text-left"
+                          className="mb-1 block w-full max-w-full overflow-hidden rounded-lg border-l-2 border-[var(--accent)] bg-[var(--surface)] px-2.5 py-1.5 text-left"
                         >
-                          <span className="block font-mono text-[9px] text-[var(--muted)]">
+                          <span className="block truncate font-mono text-[9px] text-[var(--muted)]">
                             ↩ {m.replyToName ?? "메시지"}
                           </span>
                           <span className="block truncate text-[11px] text-[var(--muted)]">
