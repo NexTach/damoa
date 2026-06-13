@@ -6,6 +6,8 @@ import { DialogProvider, useDialog } from "@/components/dialog";
 import {
   IconArrowLeft,
   IconCamera,
+  IconDownload,
+  IconFile,
   IconPaperclip,
   IconPencil,
   IconPlus,
@@ -25,6 +27,7 @@ import {
   deleteRoom,
   fetchMe,
   fetchOg,
+  FileTooLargeError,
   fileUrl,
   getToken,
   isAuthError,
@@ -155,6 +158,64 @@ function LinkPreview({ url }: { url: string }) {
   );
 }
 
+// Renders a sent attachment by mime type: image / video / audio / generic file.
+function AttachmentView({
+  url,
+  type,
+  name,
+}: {
+  url: string;
+  type: string | null;
+  name: string | null;
+}) {
+  if (type?.startsWith("image/")) {
+    return (
+      <img
+        src={url}
+        alt={name ?? ""}
+        className="mb-1 max-h-72 max-w-full rounded-2xl object-cover"
+      />
+    );
+  }
+  if (type?.startsWith("video/")) {
+    return (
+      // biome-ignore lint/a11y/useMediaCaption: user-authored fake chat clip
+      <video
+        src={url}
+        controls
+        className="mb-1 max-h-72 max-w-full rounded-2xl"
+      />
+    );
+  }
+  if (type?.startsWith("audio/")) {
+    return <audio src={url} controls className="mb-1 max-w-full" />;
+  }
+  return (
+    <a
+      href={url}
+      download={name ?? true}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="mb-1 flex max-w-[15rem] items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2.5 text-left transition-colors hover:border-[var(--muted)]"
+    >
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--surface)] text-[var(--muted)]">
+        <IconFile size={18} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] text-[var(--fg)]">
+          {name ?? "파일"}
+        </span>
+        <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-[var(--muted)]">
+          {(type?.split("/")[1] ?? "file").slice(0, 12)}
+        </span>
+      </span>
+      <span className="shrink-0 text-[var(--muted)]">
+        <IconDownload size={16} />
+      </span>
+    </a>
+  );
+}
+
 function Avatar({ persona, size = 32 }: { persona?: Persona; size?: number }) {
   const color = persona?.color ?? "#555";
   if (persona?.avatarUrl) {
@@ -204,10 +265,12 @@ function TalkmakerInner() {
   const [pending, setPending] = useState<{
     key: string;
     type: string;
+    name: string | null;
     url: string;
   } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [editing, setEditing] = useState<{
     id: number;
     personaId: number;
@@ -341,13 +404,25 @@ function TalkmakerInner() {
   };
 
   const pickFile = async (file: File | null) => {
-    if (!file) return;
+    if (!file || uploading) return;
+    if (pending) URL.revokeObjectURL(pending.url);
     setUploading(true);
     try {
-      const { key, type } = await uploadAttachment(file);
-      setPending({ key, type, url: URL.createObjectURL(file) });
-    } catch {
-      dialog.alert("파일 업로드에 실패했어요.");
+      const { key, type, name } = await uploadAttachment(file);
+      setPending({
+        key,
+        type,
+        name: name ?? file.name,
+        url: URL.createObjectURL(file),
+      });
+    } catch (e) {
+      if (isAuthError(e)) return;
+      dialog.alert(
+        e instanceof FileTooLargeError
+          ? "파일이 너무 커요. 더 작은 파일로 보내주세요."
+          : "파일 업로드에 실패했어요.",
+        "첨부 실패",
+      );
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -364,6 +439,7 @@ function TalkmakerInner() {
         content: draft.trim(),
         attachmentKey: pending?.key,
         attachmentType: pending?.type,
+        attachmentName: pending?.name ?? undefined,
       });
       setMessages((cur) => [...cur, msg]);
       setDraft("");
@@ -563,7 +639,35 @@ function TalkmakerInner() {
           채팅방을 선택하거나 + 로 만드세요
         </div>
       ) : (
-        <section className="relative flex flex-1 flex-col">
+        <section
+          className="relative flex flex-1 flex-col"
+          onDragEnter={(e) => {
+            if (e.dataTransfer.types.includes("Files")) {
+              e.preventDefault();
+              setDragOver(true);
+            }
+          }}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+          }}
+          onDragLeave={(e) => {
+            if (e.currentTarget === e.target) setDragOver(false);
+          }}
+          onDrop={(e) => {
+            if (!e.dataTransfer.files.length) return;
+            e.preventDefault();
+            setDragOver(false);
+            pickFile(e.dataTransfer.files[0]);
+          }}
+        >
+          {dragOver && (
+            <div className="pointer-events-none absolute inset-0 z-30 m-3 grid place-items-center rounded-2xl border-2 border-dashed border-[var(--accent)] bg-[var(--bg)]/80 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-2 font-mono text-xs tracking-[0.2em] text-[var(--fg)]">
+                <IconPaperclip size={28} />
+                여기에 놓아 첨부
+              </div>
+            </div>
+          )}
           <header className="flex items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-4 md:px-6">
             <div className="flex min-w-0 items-center gap-2">
               <button
@@ -664,21 +768,13 @@ function TalkmakerInner() {
                         <IconTrash size={13} /> 만료된 파일입니다
                       </div>
                     )}
-                    {m.attachmentUrl &&
-                      (m.attachmentType?.startsWith("video/") ? (
-                        // biome-ignore lint/a11y/useMediaCaption: user-authored fake chat clip
-                        <video
-                          src={m.attachmentUrl}
-                          controls
-                          className="mb-1 max-h-72 max-w-full rounded-2xl"
-                        />
-                      ) : (
-                        <img
-                          src={m.attachmentUrl}
-                          alt=""
-                          className="mb-1 max-h-72 max-w-full rounded-2xl object-cover"
-                        />
-                      ))}
+                    {m.attachmentUrl && (
+                      <AttachmentView
+                        url={m.attachmentUrl}
+                        type={m.attachmentType}
+                        name={m.attachmentName}
+                      />
+                    )}
                     {editing?.id === m.id ? (
                       <div className="flex w-64 max-w-full flex-col gap-2 rounded-2xl border border-[var(--line)] bg-[var(--bg-2)] p-2 text-left">
                         <textarea
@@ -817,22 +913,26 @@ function TalkmakerInner() {
               </div>
             )}
             {pending && (
-              <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1.5">
-                {pending.type.startsWith("video/") ? (
-                  // biome-ignore lint/a11y/useMediaCaption: preview of staged clip
-                  <video
-                    src={pending.url}
-                    className="h-12 w-12 rounded-lg object-cover"
-                  />
-                ) : (
+              <div className="mb-3 inline-flex max-w-full items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1.5">
+                {pending.type.startsWith("image/") ? (
                   <img
                     src={pending.url}
                     alt=""
-                    className="h-12 w-12 rounded-lg object-cover"
+                    className="h-12 w-12 shrink-0 rounded-lg object-cover"
                   />
+                ) : pending.type.startsWith("video/") ? (
+                  // biome-ignore lint/a11y/useMediaCaption: preview of staged clip
+                  <video
+                    src={pending.url}
+                    className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                  />
+                ) : (
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-[var(--surface)] text-[var(--muted)]">
+                    <IconFile size={20} />
+                  </span>
                 )}
-                <span className="font-mono text-[10px] text-[var(--muted)]">
-                  첨부됨
+                <span className="min-w-0 truncate px-1 font-mono text-[11px] text-[var(--muted)]">
+                  {pending.name ?? "첨부됨"}
                 </span>
                 <button
                   type="button"
@@ -841,7 +941,7 @@ function TalkmakerInner() {
                     setPending(null);
                   }}
                   aria-label="첨부 제거"
-                  className="grid h-6 w-6 place-items-center text-[var(--muted)] hover:text-[#ff5e3a]"
+                  className="grid h-6 w-6 shrink-0 place-items-center text-[var(--muted)] hover:text-[#ff5e3a]"
                 >
                   <IconX size={14} />
                 </button>
@@ -851,7 +951,6 @@ function TalkmakerInner() {
               <input
                 ref={fileRef}
                 type="file"
-                accept="image/*,video/*"
                 hidden
                 onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
               />
@@ -859,8 +958,8 @@ function TalkmakerInner() {
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={sender == null || busy}
-                aria-label="사진·동영상 첨부"
-                title="사진·동영상 첨부"
+                aria-label="파일 첨부"
+                title="사진·동영상·파일 첨부"
                 className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-[var(--line)] bg-[var(--bg-2)] text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30"
               >
                 {uploading ? (

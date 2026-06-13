@@ -29,6 +29,7 @@ class MessageServiceImpl(
             content = req.content,
             attachmentKey = req.attachmentKey,
             attachmentType = req.attachmentType,
+            attachmentName = req.attachmentName,
             sentAt = req.sentAt ?: Instant.now(),
         )
         val saved = repository.save(message)

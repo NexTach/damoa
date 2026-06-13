@@ -18,7 +18,7 @@ class AttachmentServiceImpl(
     override fun upload(bytes: ByteArray, contentType: String, filename: String?): UploadResponse {
         val ext = filename?.substringAfterLast('.', "")?.lowercase()?.take(8).orEmpty()
         val key = storage.upload(bytes, contentType, ext)
-        return UploadResponse(key, contentType)
+        return UploadResponse(key, contentType, filename?.takeIf { it.isNotBlank() })
     }
 
     @Transactional

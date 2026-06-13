@@ -19,6 +19,7 @@ open class Message(
     open var content: String = "",
     open var attachmentKey: String? = null, // storage object key, null once expired
     open var attachmentType: String? = null, // attachment mime type
+    open var attachmentName: String? = null, // original file name (for non-media files)
     open var attachmentExpired: Boolean = false, // true after the file was auto-purged
     open var sentAt: Instant = Instant.now(), // editable display time, used for ordering
     open var createdAt: Instant = Instant.now(),

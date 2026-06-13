@@ -29,8 +29,9 @@ spring:
       enabled: false
   servlet:
     multipart:
-      max-file-size: 25MB
-      max-request-size: 26MB
+      # Cloudflare free tier caps the request body at 100MB; stay just under.
+      max-file-size: 95MB
+      max-request-size: 100MB
 
 server:
   port: ${SERVER_PORT:8080}

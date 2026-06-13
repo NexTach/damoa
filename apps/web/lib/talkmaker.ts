@@ -30,6 +30,7 @@ export type Message = {
   content: string;
   attachmentUrl: string | null;
   attachmentType: string | null;
+  attachmentName: string | null;
   attachmentExpired: boolean;
   sentAt: string;
 };
@@ -102,6 +103,7 @@ export const createMessage = (
     content: string;
     attachmentKey?: string;
     attachmentType?: string;
+    attachmentName?: string;
     sentAt?: string;
   },
 ) =>
@@ -120,10 +122,12 @@ export const updateMessage = (
     body: JSON.stringify(body),
   });
 
-/** Uploads a file to the storage and returns its object key + mime type. */
+export class FileTooLargeError extends Error {}
+
+/** Uploads any file to the storage and returns its key + mime type + name. */
 export const uploadAttachment = async (
   file: File,
-): Promise<{ key: string; type: string }> => {
+): Promise<{ key: string; type: string; name: string | null }> => {
   const token = getToken();
   const form = new FormData();
   form.append("file", file);
@@ -134,6 +138,7 @@ export const uploadAttachment = async (
   });
   if (res.status === 401 || res.status === 403)
     throw new AuthError("unauthorized");
+  if (res.status === 413) throw new FileTooLargeError("file too large");
   if (!res.ok) throw new Error(`upload ${res.status}`);
   return res.json();
 };
