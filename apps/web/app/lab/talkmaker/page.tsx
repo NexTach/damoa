@@ -661,7 +661,7 @@ function TalkmakerInner() {
           }}
         >
           {dragOver && (
-            <div className="pointer-events-none absolute inset-0 z-30 m-3 grid place-items-center rounded-2xl border-2 border-dashed border-[var(--accent)] bg-[var(--bg)]/80 backdrop-blur-sm">
+            <div className="pointer-events-none absolute inset-0 z-30 m-3 grid place-items-center rounded-2xl border-2 border-dashed border-[var(--accent)] bg-[var(--bg)]/90">
               <div className="flex flex-col items-center gap-2 font-mono text-xs tracking-[0.2em] text-[var(--fg)]">
                 <IconPaperclip size={28} />
                 여기에 놓아 첨부
@@ -1170,7 +1170,7 @@ function RoomSettings({
     });
   };
   return (
-    <div className="fixed inset-0 z-30 md:absolute md:inset-auto md:right-6 md:top-16">
+    <div className="fixed inset-0 z-[70] md:absolute md:inset-auto md:right-6 md:top-16">
       {/* Mobile backdrop (desktop is a popover, no dimming). */}
       <button
         type="button"
@@ -1302,7 +1302,7 @@ function PersonaModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[110] flex items-end justify-center bg-black/65 sm:items-center sm:p-4"
       onClick={onClose}
       // biome-ignore lint/a11y/noStaticElementInteractions: backdrop click to close
       role="presentation"

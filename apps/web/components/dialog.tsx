@@ -93,7 +93,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         <div
           role="presentation"
           onClick={onCancel}
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+          className="fixed inset-0 z-[200] flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-4"
         >
           <div
             role="dialog"

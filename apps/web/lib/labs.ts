@@ -58,6 +58,22 @@ export const LABS: Lab[] = [
     color: "#ff4d8d",
     ready: true,
   },
+  {
+    slug: "orbit",
+    index: "07",
+    title: "Orbit",
+    tag: "Gravity",
+    color: "#ffd23e",
+    ready: true,
+  },
+  {
+    slug: "type",
+    index: "08",
+    title: "Kinetype",
+    tag: "Typeflow",
+    color: "#36e0ff",
+    ready: true,
+  },
 ];
 
 export function getLab(slug: string): Lab | undefined {
