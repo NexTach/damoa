@@ -301,7 +301,10 @@ function TalkmakerInner() {
   const [jumped, setJumped] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [highlightId, setHighlightId] = useState<number | null>(null);
+  const [actionMsg, setActionMsg] = useState<Message | null>(null);
+  const [quickPersona, setQuickPersona] = useState<Persona | null>(null);
   const scrollToId = useRef<number | null>(null);
+  const pressTimer = useRef<number | null>(null);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -599,6 +602,21 @@ function TalkmakerInner() {
     if (!ok) return;
     await deleteMessage(room.id, id);
     setMessages((cur) => cur.filter((m) => m.id !== id));
+  };
+
+  // Long-press (touch) opens the message action menu (edit / delete).
+  const startPress = (m: Message) => {
+    if (capture || editing) return;
+    pressTimer.current = window.setTimeout(() => {
+      pressTimer.current = null;
+      setActionMsg(m);
+    }, 420);
+  };
+  const cancelPress = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
   };
 
   const startEdit = (m: Message) =>
@@ -922,10 +940,26 @@ function TalkmakerInner() {
                     (grouped ? (
                       <div className="w-7 shrink-0" />
                     ) : (
-                      <Avatar persona={p} size={28} />
+                      <button
+                        type="button"
+                        onClick={() => p && setQuickPersona(p)}
+                        aria-label={`${p?.name ?? "페르소나"} 편집`}
+                        title="페르소나 편집"
+                        className="shrink-0 rounded-full transition-opacity hover:opacity-80"
+                      >
+                        <Avatar persona={p} size={28} />
+                      </button>
                     ))}
                   <div
-                    className={`flex max-w-[68%] flex-col ${mine ? "items-end text-right" : "items-start"}`}
+                    onTouchStart={() => startPress(m)}
+                    onTouchEnd={cancelPress}
+                    onTouchMove={cancelPress}
+                    onContextMenu={(e) => {
+                      if (capture) return;
+                      e.preventDefault();
+                      setActionMsg(m);
+                    }}
+                    className={`flex max-w-[68%] select-none flex-col [-webkit-touch-callout:none] ${mine ? "items-end text-right" : "items-start"}`}
                   >
                     {!mine && !grouped && (
                       <span className="mb-1 font-mono text-[10px] text-[var(--muted)]">
@@ -1163,7 +1197,9 @@ function TalkmakerInner() {
                 placeholder={
                   sender != null ? "메시지 보내기" : "보낸 사람을 먼저 고르세요"
                 }
-                disabled={sender == null || busy}
+                // Stay enabled while sending so focus (and the mobile keyboard)
+                // is never lost — enables consecutive sends.
+                disabled={sender == null}
                 className="max-h-32 flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50"
               />
               <button
@@ -1211,7 +1247,75 @@ function TalkmakerInner() {
       {statsOpen && room && (
         <TalkStats roomId={room.id} onClose={() => setStatsOpen(false)} />
       )}
+      {actionMsg && (
+        <ActionSheet
+          onEdit={() => {
+            startEdit(actionMsg);
+            setActionMsg(null);
+          }}
+          onDelete={() => {
+            const id = actionMsg.id;
+            setActionMsg(null);
+            removeMessage(id);
+          }}
+          onClose={() => setActionMsg(null)}
+        />
+      )}
+      {quickPersona && (
+        <PersonaQuickEdit
+          persona={quickPersona}
+          onAvatar={setPersonaAvatar}
+          onEdit={editPersona}
+          onDelete={async (id) => {
+            await removePersona(id);
+            setQuickPersona(null);
+          }}
+          onClose={() => setQuickPersona(null)}
+        />
+      )}
     </main>
+  );
+}
+
+// Bottom-sheet message actions for touch (long-press) — edit / delete.
+function ActionSheet({
+  onEdit,
+  onDelete,
+  onClose,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/55 sm:items-center sm:p-4"
+      onClick={onClose}
+      // biome-ignore lint/a11y/noStaticElementInteractions: backdrop close
+      role="presentation"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
+        role="presentation"
+        className="pb-safe sheet-up w-full max-w-sm overflow-hidden rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-2 shadow-2xl sm:rounded-2xl"
+      >
+        <button
+          type="button"
+          onClick={onEdit}
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] hover:bg-[var(--hover)]"
+        >
+          <IconPencil size={16} /> 수정
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] text-[#ff5e3a] hover:bg-[var(--hover)]"
+        >
+          <IconTrash size={16} /> 삭제
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1631,6 +1735,138 @@ function PersonaModal({
             추가
           </button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// Quick single-persona editor opened by tapping a message avatar.
+function PersonaQuickEdit({
+  persona,
+  onAvatar,
+  onEdit,
+  onDelete,
+  onClose,
+}: {
+  persona: Persona;
+  onAvatar: (p: Persona, file: File) => Promise<void>;
+  onEdit: (
+    p: Persona,
+    patch: Partial<Pick<Persona, "name" | "color" | "avatarUrl" | "bio">>,
+  ) => Promise<void>;
+  onDelete: (id: number) => void;
+  onClose: () => void;
+}) {
+  const dialog = useDialog();
+  const [busy, setBusy] = useState(false);
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const onPick = async (file: File | null) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      await onAvatar(persona, file);
+    } catch {
+      dialog.alert("프로필 사진 변경에 실패했어요.");
+    } finally {
+      setBusy(false);
+      if (avatarInput.current) avatarInput.current.value = "";
+    }
+  };
+  return (
+    <div
+      className="fixed inset-0 z-[110] flex items-end justify-center bg-black/65 sm:items-center sm:p-4"
+      onClick={onClose}
+      // biome-ignore lint/a11y/noStaticElementInteractions: backdrop close
+      role="presentation"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
+        role="presentation"
+        className="pb-safe sheet-up w-full max-w-sm rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-5 shadow-2xl sm:rounded-2xl"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <span className="font-display text-lg">페르소나 편집</span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="text-[var(--muted)] hover:text-[var(--fg)]"
+          >
+            <IconX size={18} />
+          </button>
+        </div>
+        <input
+          ref={avatarInput}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+        />
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => avatarInput.current?.click()}
+            title="프로필 사진 변경"
+            className="relative shrink-0 rounded-full hover:opacity-80"
+          >
+            <Avatar persona={persona} size={56} />
+            <span className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-[var(--fg)] text-[var(--bg)]">
+              <IconPencil size={10} />
+            </span>
+            {busy && (
+              <span className="absolute inset-0 grid place-items-center rounded-full bg-black/50 text-[9px] text-white">
+                …
+              </span>
+            )}
+          </button>
+          <input
+            type="color"
+            defaultValue={persona.color}
+            onChange={(e) => onEdit(persona, { color: e.target.value })}
+            title="색상"
+            className="h-9 w-9 shrink-0 cursor-pointer rounded border border-[var(--line)] bg-transparent"
+          />
+          <input
+            defaultValue={persona.name}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v && v !== persona.name) onEdit(persona, { name: v });
+            }}
+            placeholder="이름"
+            className="min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--muted)]"
+          />
+        </div>
+        <input
+          defaultValue={persona.bio ?? ""}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            if (v !== (persona.bio ?? "")) onEdit(persona, { bio: v || null });
+          }}
+          placeholder="한 줄 소개 (선택)"
+          className="mt-3 w-full rounded-lg border border-[var(--line)] bg-transparent px-3 py-2 text-[13px] text-[var(--muted)] outline-none focus:border-[var(--muted)]"
+        />
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={async () => {
+              if (
+                await dialog.confirm(
+                  `'${persona.name}' 페르소나를 삭제할까요?`,
+                  {
+                    title: "페르소나 삭제",
+                    confirmText: "삭제",
+                    danger: true,
+                  },
+                )
+              )
+                onDelete(persona.id);
+            }}
+            className="font-mono text-[11px] text-[var(--muted)] hover:text-[#ff5e3a]"
+          >
+            삭제
+          </button>
+        </div>
       </div>
     </div>
   );
