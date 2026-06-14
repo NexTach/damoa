@@ -211,11 +211,21 @@ function AttachmentView({
   type: string | null;
   name: string | null;
 }) {
+  // Falls back to the expired placeholder if the file can't be loaded (410 etc.).
+  const [broken, setBroken] = useState(false);
+  if (broken) {
+    return (
+      <div className="mb-1 flex items-center gap-2 rounded-2xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
+        <IconTrash size={13} /> 만료된 파일입니다
+      </div>
+    );
+  }
   if (type?.startsWith("image/")) {
     return (
       <img
         src={url}
         alt={name ?? ""}
+        onError={() => setBroken(true)}
         className="mb-1 max-h-72 max-w-full rounded-2xl object-cover"
       />
     );
@@ -226,12 +236,20 @@ function AttachmentView({
       <video
         src={url}
         controls
+        onError={() => setBroken(true)}
         className="mb-1 max-h-72 max-w-full rounded-2xl"
       />
     );
   }
   if (type?.startsWith("audio/")) {
-    return <audio src={url} controls className="mb-1 max-w-full" />;
+    return (
+      <audio
+        src={url}
+        controls
+        onError={() => setBroken(true)}
+        className="mb-1 max-w-full"
+      />
+    );
   }
   return (
     <a
