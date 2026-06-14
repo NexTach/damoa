@@ -685,7 +685,7 @@ function PersonaeInner() {
 
   // Long-press (touch) opens the message action menu as a bottom sheet.
   const startPress = (m: Message) => {
-    if (capture || editing) return;
+    if (editing) return;
     pressTimer.current = window.setTimeout(() => {
       pressTimer.current = null;
       setActionPos(null); // touch → bottom sheet
@@ -741,7 +741,6 @@ function PersonaeInner() {
     if (Math.abs(dx) > 60) startReply(m);
   };
   const onMsgContextMenu = (m: Message, e: React.MouseEvent) => {
-    if (capture) return;
     e.preventDefault();
     if (touching.current) return; // touch long-press handles this as a sheet
     setActionPos({ x: e.clientX, y: e.clientY });
@@ -996,50 +995,50 @@ function PersonaeInner() {
           )}
           <header className="flex items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-4 md:px-6">
             <div className="flex min-w-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setRoom(null)}
-                aria-label="목록으로"
-                className="shrink-0 text-[var(--muted)] hover:text-[var(--fg)] md:hidden"
-              >
-                <IconArrowLeft size={20} />
-              </button>
+              {capture ? (
+                // Exit capture feels like backing out of the room.
+                <button
+                  type="button"
+                  onClick={() => setCapture(false)}
+                  aria-label="캡처 모드 종료"
+                  title="캡처 모드 종료"
+                  className="shrink-0 text-[var(--muted)] hover:text-[var(--fg)]"
+                >
+                  <IconArrowLeft size={20} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setRoom(null)}
+                  aria-label="목록으로"
+                  className="shrink-0 text-[var(--muted)] hover:text-[var(--fg)] md:hidden"
+                >
+                  <IconArrowLeft size={20} />
+                </button>
+              )}
               <div className="truncate font-display text-xl">{room.title}</div>
             </div>
             <div className="flex shrink-0 items-center gap-1 text-[var(--muted)]">
               <button
                 type="button"
-                onClick={() => {
-                  setCapture((v) => !v);
-                  setSettingsOpen(false);
-                  setEditing(null);
-                }}
-                aria-label={capture ? "캡처 모드 종료" : "캡처 모드"}
-                title={capture ? "캡처 모드 종료" : "캡처 모드"}
-                className={`grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)] ${capture ? "bg-[var(--hover-strong)] text-[var(--accent)]" : ""}`}
+                onClick={() => setSearchOpen(true)}
+                aria-label="검색"
+                title="검색"
+                className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
               >
-                {capture ? <IconX size={18} /> : <IconCamera size={18} />}
+                <IconSearch size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsOpen(true)}
+                aria-label="통계"
+                title="통계"
+                className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+              >
+                <IconChart size={18} />
               </button>
               {!capture && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => setSearchOpen(true)}
-                    aria-label="검색"
-                    title="검색"
-                    className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
-                  >
-                    <IconSearch size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStatsOpen(true)}
-                    aria-label="통계"
-                    title="통계"
-                    className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
-                  >
-                    <IconChart size={18} />
-                  </button>
                   <button
                     type="button"
                     onClick={() => setSettingsOpen((v) => !v)}
@@ -1048,6 +1047,19 @@ function PersonaeInner() {
                     className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
                   >
                     <IconSettings size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCapture(true);
+                      setSettingsOpen(false);
+                      setEditing(null);
+                    }}
+                    aria-label="캡처 모드"
+                    title="캡처 모드"
+                    className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+                  >
+                    <IconCamera size={18} />
                   </button>
                 </>
               )}
@@ -1316,6 +1328,13 @@ function PersonaeInner() {
                 })}
               </div>
             )}
+            {capture && sender != null && (
+              <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] px-2.5 py-1 font-mono text-[11px] text-[var(--muted)]">
+                <Avatar persona={personaBy(sender)} size={16} />
+                {personaBy(sender)?.name}
+                <span className="opacity-60">(으)로 전송</span>
+              </div>
+            )}
             {!uploading && pending && (
               <div className="mb-3 inline-flex max-w-full items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1.5">
                 {pending.type.startsWith("image/") ? (
@@ -1440,6 +1459,8 @@ function PersonaeInner() {
         <ActionSheet
           pos={actionPos}
           canCopy={!!actionMsg.content.trim()}
+          // In capture mode you can only edit/delete your own (sender's) messages.
+          canModify={!capture || actionMsg.personaId === sender}
           onReply={() => {
             startReply(actionMsg);
             setActionMsg(null);
@@ -1603,6 +1624,7 @@ function MenuItem({
 function ActionSheet({
   pos,
   canCopy,
+  canModify,
   onReply,
   onCopy,
   onEdit,
@@ -1611,6 +1633,7 @@ function ActionSheet({
 }: {
   pos: { x: number; y: number } | null;
   canCopy: boolean;
+  canModify: boolean;
   onReply: () => void;
   onCopy: () => void;
   onEdit: () => void;
@@ -1627,13 +1650,21 @@ function ActionSheet({
           onClick={onCopy}
         />
       )}
-      <MenuItem icon={<IconPencil size={16} />} label="수정" onClick={onEdit} />
-      <MenuItem
-        icon={<IconTrash size={16} />}
-        label="삭제"
-        danger
-        onClick={onDelete}
-      />
+      {canModify && (
+        <>
+          <MenuItem
+            icon={<IconPencil size={16} />}
+            label="수정"
+            onClick={onEdit}
+          />
+          <MenuItem
+            icon={<IconTrash size={16} />}
+            label="삭제"
+            danger
+            onClick={onDelete}
+          />
+        </>
+      )}
     </ActionMenu>
   );
 }
