@@ -11,7 +11,13 @@ interface MessageService {
      * Keyset page of messages (ascending). Newest page when [before] and [at]
      * are null; [at] loads the page ending at a specific message (for jumps).
      */
-    fun list(ownerId: Long, roomId: Long, limit: Int, before: String?, at: Long?): MessagePage
+    fun list(
+        ownerId: Long,
+        roomId: Long,
+        limit: Int,
+        before: String?,
+        at: Long?,
+    ): MessagePage
 
     fun search(
         ownerId: Long,
@@ -23,9 +29,22 @@ interface MessageService {
         cursor: String?,
     ): SearchResult
 
-    fun create(ownerId: Long, roomId: Long, req: MessageRequest): MessageResponse
+    fun create(
+        ownerId: Long,
+        roomId: Long,
+        req: MessageRequest,
+    ): MessageResponse
 
-    fun update(ownerId: Long, roomId: Long, messageId: Long, req: MessageRequest): MessageResponse
+    fun update(
+        ownerId: Long,
+        roomId: Long,
+        messageId: Long,
+        req: MessageRequest,
+    ): MessageResponse
 
-    fun delete(ownerId: Long, roomId: Long, messageId: Long)
+    fun delete(
+        ownerId: Long,
+        roomId: Long,
+        messageId: Long,
+    )
 }

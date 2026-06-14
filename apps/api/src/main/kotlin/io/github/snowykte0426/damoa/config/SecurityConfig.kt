@@ -28,10 +28,11 @@ class SecurityConfig(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
                 it
-                    .requestMatchers("/api/talkmaker/**").authenticated()
-                    .anyRequest().permitAll()
-            }
-            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter::class.java)
+                    .requestMatchers("/api/talkmaker/**")
+                    .authenticated()
+                    .anyRequest()
+                    .permitAll()
+            }.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter::class.java)
         return http.build()
     }
 

@@ -11,10 +11,11 @@ data class RoomResponse(
     val updatedAt: Instant,
 )
 
-fun Room.toResponse() = RoomResponse(
-    id = id,
-    title = title,
-    selfPersonaId = selfPersonaId,
-    participantPersonaIds = participantPersonaIds.toList(),
-    updatedAt = updatedAt,
-)
+fun Room.toResponse() =
+    RoomResponse(
+        id = id,
+        title = title,
+        selfPersonaId = selfPersonaId,
+        participantPersonaIds = participantPersonaIds.toList(),
+        updatedAt = updatedAt,
+    )

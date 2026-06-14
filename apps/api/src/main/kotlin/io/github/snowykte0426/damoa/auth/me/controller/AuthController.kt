@@ -10,7 +10,9 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/auth")
-class AuthController(private val userService: UserService) {
+class AuthController(
+    private val userService: UserService,
+) {
     @GetMapping("/me")
     fun me(): MeResponse {
         val user = userService.get(currentUserId()) ?: notFound("user not found")

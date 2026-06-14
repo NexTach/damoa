@@ -9,7 +9,11 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/talkmaker/og")
-class OgController(private val service: OgService) {
+class OgController(
+    private val service: OgService,
+) {
     @GetMapping
-    fun fetch(@RequestParam url: String): OgResponse = service.fetch(url)
+    fun fetch(
+        @RequestParam url: String,
+    ): OgResponse = service.fetch(url)
 }

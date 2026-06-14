@@ -12,9 +12,13 @@ import org.springframework.web.server.ResponseStatusException
 
 @RestController
 @RequestMapping("/api/talkmaker/attachments")
-class AttachmentController(private val service: AttachmentService) {
+class AttachmentController(
+    private val service: AttachmentService,
+) {
     @PostMapping
-    fun upload(@RequestParam("file") file: MultipartFile): UploadResponse {
+    fun upload(
+        @RequestParam("file") file: MultipartFile,
+    ): UploadResponse {
         if (file.isEmpty) throw ResponseStatusException(HttpStatus.BAD_REQUEST, "empty file")
         val type = file.contentType ?: "application/octet-stream"
         return service.upload(file.bytes, type, file.originalFilename)

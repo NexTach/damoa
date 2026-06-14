@@ -1,7 +1,7 @@
 package io.github.snowykte0426.damoa.auth.oauth.repository
 
-import java.util.concurrent.ConcurrentHashMap
 import org.springframework.stereotype.Component
+import java.util.concurrent.ConcurrentHashMap
 
 // Single-instance in-memory store for pending OAuth states (PKCE verifiers), TTL 10 minutes.
 @Component
@@ -10,7 +10,10 @@ class OAuthStateStore {
     private val store = ConcurrentHashMap<String, Pair<String, Long>>()
     private val ttlMillis = 10L * 60 * 1000
 
-    fun put(state: String, verifier: String) {
+    fun put(
+        state: String,
+        verifier: String,
+    ) {
         val now = System.currentTimeMillis()
         store.entries.removeIf { it.value.second < now }
         store[state] = verifier to (now + ttlMillis)

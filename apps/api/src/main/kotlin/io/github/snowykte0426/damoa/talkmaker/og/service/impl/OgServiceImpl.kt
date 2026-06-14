@@ -3,24 +3,26 @@ package io.github.snowykte0426.damoa.talkmaker.og.service.impl
 import io.github.snowykte0426.damoa.talkmaker.og.dto.response.OgResponse
 import io.github.snowykte0426.damoa.talkmaker.og.service.OgService
 import io.github.snowykte0426.damoa.user.entity.User
+import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
+import org.springframework.stereotype.Service
+import org.springframework.web.server.ResponseStatusException
 import java.net.InetAddress
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
-import org.slf4j.LoggerFactory
-import org.springframework.http.HttpStatus
-import org.springframework.stereotype.Service
-import org.springframework.web.server.ResponseStatusException
 
 @Service
 class OgServiceImpl : OgService {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val client = HttpClient.newBuilder()
-        .followRedirects(HttpClient.Redirect.NEVER) // followed manually to re-check each hop
-        .connectTimeout(Duration.ofSeconds(4))
-        .build()
+    private val client =
+        HttpClient
+            .newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER) // followed manually to re-check each hop
+            .connectTimeout(Duration.ofSeconds(4))
+            .build()
 
     override fun fetch(url: String): OgResponse {
         var current = parseSafe(url)
@@ -30,8 +32,9 @@ class OgServiceImpl : OgService {
             val res = request(current)
             val status = res.statusCode()
             if (status in 300..399) {
-                val location = res.headers().firstValue("location").orElse(null)
-                    ?: throw badGateway("redirect without location")
+                val location =
+                    res.headers().firstValue("location").orElse(null)
+                        ?: throw badGateway("redirect without location")
                 current = parseSafe(current.resolve(location).toString())
                 return@repeat
             }
@@ -44,12 +47,14 @@ class OgServiceImpl : OgService {
     }
 
     private fun request(uri: URI): HttpResponse<String> {
-        val req = HttpRequest.newBuilder(uri)
-            .timeout(Duration.ofSeconds(6))
-            .header("User-Agent", USER_AGENT)
-            .header("Accept", "text/html,application/xhtml+xml")
-            .GET()
-            .build()
+        val req =
+            HttpRequest
+                .newBuilder(uri)
+                .timeout(Duration.ofSeconds(6))
+                .header("User-Agent", USER_AGENT)
+                .header("Accept", "text/html,application/xhtml+xml")
+                .GET()
+                .build()
         return try {
             client.send(req, HttpResponse.BodyHandlers.ofString())
         } catch (e: Exception) {
@@ -58,7 +63,11 @@ class OgServiceImpl : OgService {
         }
     }
 
-    private fun buildResponse(requested: String, base: URI, html: String): OgResponse {
+    private fun buildResponse(
+        requested: String,
+        base: URI,
+        html: String,
+    ): OgResponse {
         val meta = parseMeta(html)
         val title = meta["og:title"] ?: meta["twitter:title"] ?: titleTag(html)
         val image = (meta["og:image"] ?: meta["twitter:image"])?.let { abs(base, it) }
@@ -88,29 +97,38 @@ class OgServiceImpl : OgService {
     }
 
     private fun titleTag(html: String): String? =
-        TITLE_TAG.find(html)?.groupValues?.get(1)?.let { decode(it) }
+        TITLE_TAG
+            .find(html)
+            ?.groupValues
+            ?.get(1)
+            ?.let { decode(it) }
 
-    private fun abs(base: URI, ref: String): String? =
-        runCatching { base.resolve(ref).toString() }.getOrNull()
+    private fun abs(
+        base: URI,
+        ref: String,
+    ): String? = runCatching { base.resolve(ref).toString() }.getOrNull()
 
-    private fun decode(s: String): String = s
-        .replace("&amp;", "&")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&#x27;", "'")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&nbsp;", " ")
+    private fun decode(s: String): String =
+        s
+            .replace("&amp;", "&")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&#x27;", "'")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&nbsp;", " ")
 
     // Rejects non-http(s) and any host resolving to a private/loopback address (SSRF guard).
     private fun parseSafe(raw: String): URI {
-        val uri = runCatching { URI(raw) }.getOrNull()
-            ?: throw badRequest("invalid url")
+        val uri =
+            runCatching { URI(raw) }.getOrNull()
+                ?: throw badRequest("invalid url")
         val scheme = uri.scheme?.lowercase()
         if (scheme != "http" && scheme != "https") throw badRequest("unsupported scheme")
         val host = uri.host ?: throw badRequest("missing host")
-        val addrs = runCatching { InetAddress.getAllByName(host) }.getOrNull()
-            ?: throw badGateway("dns failed")
+        val addrs =
+            runCatching { InetAddress.getAllByName(host) }.getOrNull()
+                ?: throw badGateway("dns failed")
         if (addrs.any { it.isLoopbackAddress || it.isSiteLocalAddress || it.isLinkLocalAddress || it.isAnyLocalAddress }) {
             throw badRequest("blocked host")
         }

@@ -6,5 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository
 interface PersonaRepository : JpaRepository<Persona, Long> {
     fun findByOwnerIdOrderByCreatedAtAsc(ownerId: Long): List<Persona>
 
-    fun findByIdAndOwnerId(id: Long, ownerId: Long): Persona?
+    fun findByIdAndOwnerId(
+        id: Long,
+        ownerId: Long,
+    ): Persona?
 }

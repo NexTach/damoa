@@ -6,7 +6,6 @@ import io.github.snowykte0426.damoa.talkmaker.message.dto.response.MessagePage
 import io.github.snowykte0426.damoa.talkmaker.message.dto.response.MessageResponse
 import io.github.snowykte0426.damoa.talkmaker.message.dto.response.SearchResult
 import io.github.snowykte0426.damoa.talkmaker.message.service.MessageService
-import java.time.Instant
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -16,10 +15,13 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import java.time.Instant
 
 @RestController
 @RequestMapping("/api/talkmaker/rooms/{roomId}/messages")
-class MessageController(private val service: MessageService) {
+class MessageController(
+    private val service: MessageService,
+) {
     @GetMapping
     fun list(
         @PathVariable roomId: Long,
@@ -36,19 +38,22 @@ class MessageController(private val service: MessageService) {
         @RequestParam(required = false) after: Long?,
         @RequestParam(required = false) before: Long?,
         @RequestParam(required = false) cursor: String?,
-    ): SearchResult = service.search(
-        currentUserId(),
-        roomId,
-        q,
-        personaId,
-        after?.let(Instant::ofEpochMilli),
-        before?.let(Instant::ofEpochMilli),
-        cursor,
-    )
+    ): SearchResult =
+        service.search(
+            currentUserId(),
+            roomId,
+            q,
+            personaId,
+            after?.let(Instant::ofEpochMilli),
+            before?.let(Instant::ofEpochMilli),
+            cursor,
+        )
 
     @PostMapping
-    fun create(@PathVariable roomId: Long, @RequestBody req: MessageRequest): MessageResponse =
-        service.create(currentUserId(), roomId, req)
+    fun create(
+        @PathVariable roomId: Long,
+        @RequestBody req: MessageRequest,
+    ): MessageResponse = service.create(currentUserId(), roomId, req)
 
     @PatchMapping("/{messageId}")
     fun update(
@@ -58,6 +63,8 @@ class MessageController(private val service: MessageService) {
     ): MessageResponse = service.update(currentUserId(), roomId, messageId, req)
 
     @DeleteMapping("/{messageId}")
-    fun delete(@PathVariable roomId: Long, @PathVariable messageId: Long) =
-        service.delete(currentUserId(), roomId, messageId)
+    fun delete(
+        @PathVariable roomId: Long,
+        @PathVariable messageId: Long,
+    ) = service.delete(currentUserId(), roomId, messageId)
 }

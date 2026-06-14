@@ -10,7 +10,11 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/talkmaker/rooms/{roomId}/stats")
-class StatsController(private val service: StatsService) {
+class StatsController(
+    private val service: StatsService,
+) {
     @GetMapping
-    fun stats(@PathVariable roomId: Long): RoomStats = service.room(currentUserId(), roomId)
+    fun stats(
+        @PathVariable roomId: Long,
+    ): RoomStats = service.room(currentUserId(), roomId)
 }

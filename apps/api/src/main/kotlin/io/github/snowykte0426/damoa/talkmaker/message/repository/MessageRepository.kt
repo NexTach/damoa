@@ -1,25 +1,29 @@
 package io.github.snowykte0426.damoa.talkmaker.message.repository
 
 import io.github.snowykte0426.damoa.talkmaker.message.entity.Message
-import java.time.Instant
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import java.time.Instant
 
 interface MessageRepository : JpaRepository<Message, Long> {
-    fun findByIdAndRoomId(id: Long, roomId: Long): Message?
+    fun findByIdAndRoomId(
+        id: Long,
+        roomId: Long,
+    ): Message?
 
     fun deleteByRoomId(roomId: Long)
 
     fun countByRoomId(roomId: Long): Long
 
-    fun findByAttachmentKeyIsNotNullAndAttachmentExpiredFalseAndCreatedAtBefore(
-        cutoff: Instant,
-    ): List<Message>
+    fun findByAttachmentKeyIsNotNullAndAttachmentExpiredFalseAndCreatedAtBefore(cutoff: Instant): List<Message>
 
     // Newest page (no cursor). Caller reverses to ascending for display.
-    fun findByRoomIdOrderBySentAtDescIdDesc(roomId: Long, pageable: Pageable): List<Message>
+    fun findByRoomIdOrderBySentAtDescIdDesc(
+        roomId: Long,
+        pageable: Pageable,
+    ): List<Message>
 
     // Keyset pagination: messages strictly older than the (sentAt, id) cursor.
     @Query(
@@ -99,10 +103,14 @@ interface MessageRepository : JpaRepository<Message, Long> {
         "select m.personaId as personaId, count(m) as cnt from Message m " +
             "where m.roomId = :roomId group by m.personaId",
     )
-    fun countByPersona(@Param("roomId") roomId: Long): List<PersonaCountRow>
+    fun countByPersona(
+        @Param("roomId") roomId: Long,
+    ): List<PersonaCountRow>
 
     @Query("select m.sentAt from Message m where m.roomId = :roomId")
-    fun sentAts(@Param("roomId") roomId: Long): List<Instant>
+    fun sentAts(
+        @Param("roomId") roomId: Long,
+    ): List<Instant>
 }
 
 interface PersonaCountRow {

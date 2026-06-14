@@ -6,5 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository
 interface RoomRepository : JpaRepository<Room, Long> {
     fun findByOwnerIdOrderByUpdatedAtDesc(ownerId: Long): List<Room>
 
-    fun findByIdAndOwnerId(id: Long, ownerId: Long): Room?
+    fun findByIdAndOwnerId(
+        id: Long,
+        ownerId: Long,
+    ): Room?
 }

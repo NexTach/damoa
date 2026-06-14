@@ -15,18 +15,25 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/talkmaker/personas")
-class PersonaController(private val service: PersonaService) {
+class PersonaController(
+    private val service: PersonaService,
+) {
     @GetMapping
     fun list(): List<PersonaResponse> = service.list(currentUserId())
 
     @PostMapping
-    fun create(@RequestBody req: PersonaRequest): PersonaResponse =
-        service.create(currentUserId(), req)
+    fun create(
+        @RequestBody req: PersonaRequest,
+    ): PersonaResponse = service.create(currentUserId(), req)
 
     @PatchMapping("/{id}")
-    fun update(@PathVariable id: Long, @RequestBody req: PersonaRequest): PersonaResponse =
-        service.update(currentUserId(), id, req)
+    fun update(
+        @PathVariable id: Long,
+        @RequestBody req: PersonaRequest,
+    ): PersonaResponse = service.update(currentUserId(), id, req)
 
     @DeleteMapping("/{id}")
-    fun delete(@PathVariable id: Long) = service.delete(currentUserId(), id)
+    fun delete(
+        @PathVariable id: Long,
+    ) = service.delete(currentUserId(), id)
 }

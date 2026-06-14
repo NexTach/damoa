@@ -15,20 +15,30 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/talkmaker/rooms")
-class RoomController(private val service: RoomService) {
+class RoomController(
+    private val service: RoomService,
+) {
     @GetMapping
     fun list(): List<RoomResponse> = service.list(currentUserId())
 
     @GetMapping("/{id}")
-    fun get(@PathVariable id: Long): RoomResponse = service.get(currentUserId(), id)
+    fun get(
+        @PathVariable id: Long,
+    ): RoomResponse = service.get(currentUserId(), id)
 
     @PostMapping
-    fun create(@RequestBody req: RoomRequest): RoomResponse = service.create(currentUserId(), req)
+    fun create(
+        @RequestBody req: RoomRequest,
+    ): RoomResponse = service.create(currentUserId(), req)
 
     @PatchMapping("/{id}")
-    fun update(@PathVariable id: Long, @RequestBody req: RoomRequest): RoomResponse =
-        service.update(currentUserId(), id, req)
+    fun update(
+        @PathVariable id: Long,
+        @RequestBody req: RoomRequest,
+    ): RoomResponse = service.update(currentUserId(), id, req)
 
     @DeleteMapping("/{id}")
-    fun delete(@PathVariable id: Long) = service.delete(currentUserId(), id)
+    fun delete(
+        @PathVariable id: Long,
+    ) = service.delete(currentUserId(), id)
 }

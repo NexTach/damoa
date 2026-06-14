@@ -7,9 +7,9 @@ import io.github.snowykte0426.damoa.talkmaker.stats.dto.response.DayStat
 import io.github.snowykte0426.damoa.talkmaker.stats.dto.response.PersonaStat
 import io.github.snowykte0426.damoa.talkmaker.stats.dto.response.RoomStats
 import io.github.snowykte0426.damoa.talkmaker.stats.service.StatsService
-import java.time.ZoneId
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.ZoneId
 
 @Service
 class StatsServiceImpl(
@@ -20,17 +20,23 @@ class StatsServiceImpl(
     private val zone = ZoneId.of("Asia/Seoul")
 
     @Transactional(readOnly = true)
-    override fun room(ownerId: Long, roomId: Long): RoomStats {
+    override fun room(
+        ownerId: Long,
+        roomId: Long,
+    ): RoomStats {
         roomService.requireOwned(ownerId, roomId)
 
-        val personas = personaRepository.findByOwnerIdOrderByCreatedAtAsc(ownerId)
-            .associateBy { it.id }
-        val perPersona = messageRepository.countByPersona(roomId)
-            .map { row ->
-                val p = personas[row.personaId]
-                PersonaStat(row.personaId, p?.name ?: "(삭제됨)", p?.color ?: "#7d7d76", row.cnt)
-            }
-            .sortedByDescending { it.count }
+        val personas =
+            personaRepository
+                .findByOwnerIdOrderByCreatedAtAsc(ownerId)
+                .associateBy { it.id }
+        val perPersona =
+            messageRepository
+                .countByPersona(roomId)
+                .map { row ->
+                    val p = personas[row.personaId]
+                    PersonaStat(row.personaId, p?.name ?: "(삭제됨)", p?.color ?: "#7d7d76", row.cnt)
+                }.sortedByDescending { it.count }
 
         // Bucket by KST calendar day (sentAt = the displayed conversation time).
         val buckets = sortedMapOf<String, Long>()

@@ -5,10 +5,10 @@ import io.github.snowykte0426.damoa.storage.StorageService
 import io.github.snowykte0426.damoa.talkmaker.attachment.dto.response.UploadResponse
 import io.github.snowykte0426.damoa.talkmaker.attachment.service.AttachmentService
 import io.github.snowykte0426.damoa.talkmaker.message.repository.MessageRepository
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 @Service
 class AttachmentServiceImpl(
@@ -18,8 +18,17 @@ class AttachmentServiceImpl(
 ) : AttachmentService {
     private val ttlDays = props.attachmentTtlDays
 
-    override fun upload(bytes: ByteArray, contentType: String, filename: String?): UploadResponse {
-        val ext = filename?.substringAfterLast('.', "")?.lowercase()?.take(8).orEmpty()
+    override fun upload(
+        bytes: ByteArray,
+        contentType: String,
+        filename: String?,
+    ): UploadResponse {
+        val ext =
+            filename
+                ?.substringAfterLast('.', "")
+                ?.lowercase()
+                ?.take(8)
+                .orEmpty()
         val key = storage.upload(bytes, contentType, ext)
         return UploadResponse(key, contentType, filename?.takeIf { it.isNotBlank() })
     }
@@ -27,8 +36,9 @@ class AttachmentServiceImpl(
     @Transactional
     override fun purgeExpired(): Int {
         val cutoff = Instant.now().minus(ttlDays, ChronoUnit.DAYS)
-        val stale = messageRepository
-            .findByAttachmentKeyIsNotNullAndAttachmentExpiredFalseAndCreatedAtBefore(cutoff)
+        val stale =
+            messageRepository
+                .findByAttachmentKeyIsNotNullAndAttachmentExpiredFalseAndCreatedAtBefore(cutoff)
         stale.forEach { message ->
             message.attachmentKey?.let { storage.delete(it) }
             message.attachmentKey = null

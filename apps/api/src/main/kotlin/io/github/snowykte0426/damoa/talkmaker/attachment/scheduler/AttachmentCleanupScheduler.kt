@@ -6,7 +6,9 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 @Component
-class AttachmentCleanupScheduler(private val service: AttachmentService) {
+class AttachmentCleanupScheduler(
+    private val service: AttachmentService,
+) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     // Daily at 04:00: purge attachments older than the configured TTL.

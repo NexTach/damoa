@@ -17,17 +17,18 @@ data class MessageResponse(
     val sentAt: Instant,
 )
 
-fun Message.toResponse(publicBase: String) = MessageResponse(
-    id = id,
-    personaId = personaId,
-    content = content,
-    attachmentUrl =
-        if (attachmentKey != null && !attachmentExpired) "$publicBase/api/files/$attachmentKey" else null,
-    attachmentType = attachmentType,
-    attachmentName = if (!attachmentExpired) attachmentName else null,
-    attachmentExpired = attachmentExpired,
-    replyToId = replyToId,
-    replyToName = replyToName,
-    replyToText = replyToText,
-    sentAt = sentAt,
-)
+fun Message.toResponse(publicBase: String) =
+    MessageResponse(
+        id = id,
+        personaId = personaId,
+        content = content,
+        attachmentUrl =
+            if (attachmentKey != null && !attachmentExpired) "$publicBase/api/files/$attachmentKey" else null,
+        attachmentType = attachmentType,
+        attachmentName = if (!attachmentExpired) attachmentName else null,
+        attachmentExpired = attachmentExpired,
+        replyToId = replyToId,
+        replyToName = replyToName,
+        replyToText = replyToText,
+        sentAt = sentAt,
+    )
