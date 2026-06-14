@@ -5,7 +5,7 @@ data class S3Properties(
     val region: String = "us-east-1",
     val accessKey: String = "",
     val secretKey: String = "",
-    val bucket: String = "talkmaker",
+    val bucket: String = "personae",
     // Public base URL the browser uses to fetch attachments (proxied by this app).
     val publicBase: String = "http://localhost:8080",
 )
