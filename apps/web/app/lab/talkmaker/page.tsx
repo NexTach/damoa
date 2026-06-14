@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   Fragment,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -340,13 +341,21 @@ function TalkmakerInner() {
   const [atBottom, setAtBottom] = useState(true);
   const [highlightId, setHighlightId] = useState<number | null>(null);
   const [actionMsg, setActionMsg] = useState<Message | null>(null);
+  const [actionPos, setActionPos] = useState<{ x: number; y: number } | null>(
+    null,
+  );
   const [roomAction, setRoomAction] = useState<Room | null>(null);
+  const [roomActionPos, setRoomActionPos] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [quickPersona, setQuickPersona] = useState<Persona | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const scrollToId = useRef<number | null>(null);
   const pressTimer = useRef<number | null>(null);
   const uploadAbort = useRef<AbortController | null>(null);
   const swipe = useRef<{ x: number; y: number; el: HTMLElement } | null>(null);
+  const touching = useRef(false); // a touch gesture is in progress (suppress contextmenu)
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -656,11 +665,12 @@ function TalkmakerInner() {
     setMessages((cur) => cur.filter((m) => m.id !== id));
   };
 
-  // Long-press (touch) opens the message action menu (edit / delete).
+  // Long-press (touch) opens the message action menu as a bottom sheet.
   const startPress = (m: Message) => {
     if (capture || editing) return;
     pressTimer.current = window.setTimeout(() => {
       pressTimer.current = null;
+      setActionPos(null); // touch → bottom sheet
       setActionMsg(m);
     }, 420);
   };
@@ -670,6 +680,11 @@ function TalkmakerInner() {
       pressTimer.current = null;
     }
   };
+  const clearTouchingSoon = () => {
+    window.setTimeout(() => {
+      touching.current = false;
+    }, 80);
+  };
 
   const startReply = (m: Message) => {
     setReplyTo(m);
@@ -678,6 +693,7 @@ function TalkmakerInner() {
 
   // Swipe a bubble sideways to reply (mobile); long-press still opens actions.
   const onMsgTouchStart = (m: Message, e: React.TouchEvent<HTMLDivElement>) => {
+    touching.current = true;
     startPress(m);
     const t = e.touches[0];
     swipe.current = { x: t.clientX, y: t.clientY, el: e.currentTarget };
@@ -697,6 +713,7 @@ function TalkmakerInner() {
   };
   const onMsgTouchEnd = (m: Message, e: React.TouchEvent<HTMLDivElement>) => {
     cancelPress();
+    clearTouchingSoon();
     const s = swipe.current;
     swipe.current = null;
     if (!s) return;
@@ -705,12 +722,31 @@ function TalkmakerInner() {
     s.el.style.transform = "";
     if (Math.abs(dx) > 60) startReply(m);
   };
+  const onMsgContextMenu = (m: Message, e: React.MouseEvent) => {
+    if (capture) return;
+    e.preventDefault();
+    if (touching.current) return; // touch long-press handles this as a sheet
+    setActionPos({ x: e.clientX, y: e.clientY });
+    setActionMsg(m);
+  };
 
   const startRoomPress = (r: Room) => {
+    touching.current = true;
     pressTimer.current = window.setTimeout(() => {
       pressTimer.current = null;
+      setRoomActionPos(null);
       setRoomAction(r);
     }, 420);
+  };
+  const onRoomTouchEnd = () => {
+    cancelPress();
+    clearTouchingSoon();
+  };
+  const onRoomContextMenu = (r: Room, e: React.MouseEvent) => {
+    e.preventDefault();
+    if (touching.current) return;
+    setRoomActionPos({ x: e.clientX, y: e.clientY });
+    setRoomAction(r);
   };
 
   const renameRoom = async (r: Room) => {
@@ -864,12 +900,9 @@ function TalkmakerInner() {
             <div
               key={r.id}
               onTouchStart={() => startRoomPress(r)}
-              onTouchEnd={cancelPress}
+              onTouchEnd={onRoomTouchEnd}
               onTouchMove={cancelPress}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setRoomAction(r);
-              }}
+              onContextMenu={(e) => onRoomContextMenu(r, e)}
               className={`group flex w-full select-none items-center gap-2 rounded-lg px-3 py-2 transition-colors [-webkit-touch-callout:none] ${
                 room?.id === r.id
                   ? "bg-[var(--hover-strong)]"
@@ -1079,11 +1112,7 @@ function TalkmakerInner() {
                       onTouchStart={(e) => onMsgTouchStart(m, e)}
                       onTouchMove={onMsgTouchMove}
                       onTouchEnd={(e) => onMsgTouchEnd(m, e)}
-                      onContextMenu={(e) => {
-                        if (capture) return;
-                        e.preventDefault();
-                        setActionMsg(m);
-                      }}
+                      onContextMenu={(e) => onMsgContextMenu(m, e)}
                       className={`flex max-w-[68%] select-none flex-col [-webkit-touch-callout:none] ${mine ? "items-end text-right" : "items-start"}`}
                     >
                       {!mine && !grouped && (
@@ -1191,32 +1220,6 @@ function TalkmakerInner() {
                                 {timeOf(m.sentAt)}
                               </span>
                             )
-                          )}
-                          {!capture && (
-                            <span
-                              className={`absolute top-0 flex gap-1 text-[var(--muted)] opacity-0 transition-opacity group-hover:opacity-100 ${
-                                mine ? "left-0" : "right-0"
-                              }`}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => startEdit(m)}
-                                aria-label="수정"
-                                title="수정"
-                                className="grid h-6 w-6 place-items-center rounded-full bg-[var(--bg-2)] hover:text-[var(--fg)]"
-                              >
-                                <IconPencil size={12} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removeMessage(m.id)}
-                                aria-label="삭제"
-                                title="삭제"
-                                className="grid h-6 w-6 place-items-center rounded-full bg-[var(--bg-2)] hover:text-[#ff5e3a]"
-                              >
-                                <IconTrash size={12} />
-                              </button>
-                            </span>
                           )}
                         </>
                       )}
@@ -1417,6 +1420,7 @@ function TalkmakerInner() {
       )}
       {actionMsg && (
         <ActionSheet
+          pos={actionPos}
           canCopy={!!actionMsg.content.trim()}
           onReply={() => {
             startReply(actionMsg);
@@ -1467,6 +1471,7 @@ function TalkmakerInner() {
       )}
       {roomAction && (
         <RoomActionSheet
+          pos={roomActionPos}
           title={roomAction.title}
           onRename={() => {
             const r = roomAction;
@@ -1486,54 +1491,99 @@ function TalkmakerInner() {
 }
 
 // Bottom-sheet room actions for touch (long-press) — rename / delete.
-function RoomActionSheet({
-  title,
-  onRename,
-  onDelete,
+// Context menu: a cursor-anchored popover on desktop (pos set via right-click),
+// or a bottom sheet on touch (pos null via long-press, with a ghost-click guard).
+function ActionMenu({
+  pos,
   onClose,
+  children,
 }: {
-  title: string;
-  onRename: () => void;
-  onDelete: () => void;
+  pos: { x: number; y: number } | null;
   onClose: () => void;
+  children: ReactNode;
+}) {
+  const armed = useRef(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      armed.current = true;
+    }, 320);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (pos) {
+    const vw = typeof window !== "undefined" ? window.innerWidth : 9999;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 9999;
+    return (
+      <div
+        // biome-ignore lint/a11y/noStaticElementInteractions: outside-click close
+        role="presentation"
+        onClick={onClose}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onClose();
+        }}
+        className="fixed inset-0 z-[120]"
+      >
+        <div
+          // biome-ignore lint/a11y/noStaticElementInteractions: stop close on menu
+          role="presentation"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            left: Math.min(pos.x, vw - 188),
+            top: Math.min(pos.y, vh - 196),
+          }}
+          className="absolute w-44 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1 shadow-2xl"
+        >
+          {children}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div
+      // biome-ignore lint/a11y/noStaticElementInteractions: backdrop close (guarded)
+      role="presentation"
+      onClick={() => armed.current && onClose()}
+      className="fixed inset-0 z-[120] flex touch-none items-end justify-center bg-black/55 sm:items-center sm:p-4"
+    >
+      <div
+        // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
+        role="presentation"
+        onClick={(e) => e.stopPropagation()}
+        className="pb-safe sheet-up w-full max-w-sm overflow-hidden rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-2 shadow-2xl sm:rounded-2xl"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MenuItem({
+  icon,
+  label,
+  onClick,
+  danger,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
 }) {
   return (
     <button
       type="button"
-      aria-label="닫기"
-      onClick={onClose}
-      className="fixed inset-0 z-[120] flex touch-none items-end justify-center bg-black/55 sm:items-center sm:p-4"
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-[14px] hover:bg-[var(--hover)] ${
+        danger ? "text-[#ff5e3a]" : ""
+      }`}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
-        role="presentation"
-        className="pb-safe sheet-up w-full max-w-sm overflow-hidden rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-2 shadow-2xl sm:rounded-2xl"
-      >
-        <div className="truncate px-4 py-2 font-mono text-[10px] tracking-[0.2em] text-[var(--muted)]">
-          {title}
-        </div>
-        <button
-          type="button"
-          onClick={onRename}
-          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] hover:bg-[var(--hover)]"
-        >
-          <IconPencil size={16} /> 이름 변경
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] text-[#ff5e3a] hover:bg-[var(--hover)]"
-        >
-          <IconTrash size={16} /> 삭제
-        </button>
-      </div>
+      {icon} {label}
     </button>
   );
 }
 
-// Bottom-sheet message actions for touch (long-press) — copy / edit / delete.
 function ActionSheet({
+  pos,
   canCopy,
   onReply,
   onCopy,
@@ -1541,6 +1591,7 @@ function ActionSheet({
   onDelete,
   onClose,
 }: {
+  pos: { x: number; y: number } | null;
   canCopy: boolean;
   onReply: () => void;
   onCopy: () => void;
@@ -1549,51 +1600,56 @@ function ActionSheet({
   onClose: () => void;
 }) {
   return (
-    <button
-      type="button"
-      aria-label="닫기"
-      onClick={onClose}
-      // touch-none stops the backdrop/page from being dragged while open.
-      className="fixed inset-0 z-[120] flex touch-none items-end justify-center bg-black/55 sm:items-center sm:p-4"
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
-        role="presentation"
-        className="pb-safe sheet-up w-full max-w-sm overflow-hidden rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-2 shadow-2xl sm:rounded-2xl"
-      >
-        <button
-          type="button"
-          onClick={onReply}
-          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] hover:bg-[var(--hover)]"
-        >
-          <IconReply size={16} /> 답장
-        </button>
-        {canCopy && (
-          <button
-            type="button"
-            onClick={onCopy}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] hover:bg-[var(--hover)]"
-          >
-            <IconCopy size={16} /> 텍스트 복사
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onEdit}
-          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] hover:bg-[var(--hover)]"
-        >
-          <IconPencil size={16} /> 수정
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[14px] text-[#ff5e3a] hover:bg-[var(--hover)]"
-        >
-          <IconTrash size={16} /> 삭제
-        </button>
+    <ActionMenu pos={pos} onClose={onClose}>
+      <MenuItem icon={<IconReply size={16} />} label="답장" onClick={onReply} />
+      {canCopy && (
+        <MenuItem
+          icon={<IconCopy size={16} />}
+          label="텍스트 복사"
+          onClick={onCopy}
+        />
+      )}
+      <MenuItem icon={<IconPencil size={16} />} label="수정" onClick={onEdit} />
+      <MenuItem
+        icon={<IconTrash size={16} />}
+        label="삭제"
+        danger
+        onClick={onDelete}
+      />
+    </ActionMenu>
+  );
+}
+
+function RoomActionSheet({
+  pos,
+  title,
+  onRename,
+  onDelete,
+  onClose,
+}: {
+  pos: { x: number; y: number } | null;
+  title: string;
+  onRename: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <ActionMenu pos={pos} onClose={onClose}>
+      <div className="truncate px-4 py-2 font-mono text-[10px] tracking-[0.2em] text-[var(--muted)]">
+        {title}
       </div>
-    </button>
+      <MenuItem
+        icon={<IconPencil size={16} />}
+        label="이름 변경"
+        onClick={onRename}
+      />
+      <MenuItem
+        icon={<IconTrash size={16} />}
+        label="삭제"
+        danger
+        onClick={onDelete}
+      />
+    </ActionMenu>
   );
 }
 
