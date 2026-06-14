@@ -39,10 +39,12 @@ import {
   clearToken,
   createMessage,
   createPersona,
+  CLIENT_ID,
   createRoom,
   deleteMessage,
   deletePersona,
   deleteRoom,
+  eventsUrl,
   fetchMe,
   fetchOg,
   FileTooLargeError,
@@ -480,6 +482,53 @@ function PersonaeInner() {
       });
     }
   };
+
+  // Realtime sync (SSE): apply changes made on this user's other devices.
+  const onRealtime = (e: MessageEvent) => {
+    let data: { scope?: string; roomId?: number; clientId?: string };
+    try {
+      data = JSON.parse(e.data);
+    } catch {
+      return;
+    }
+    if (!data || data.clientId === CLIENT_ID) return; // skip our own changes
+    if (data.scope === "persona") {
+      listPersonas()
+        .then(setPersonas)
+        .catch(() => {});
+      return;
+    }
+    if (data.scope === "room") {
+      refreshRooms();
+      return;
+    }
+    if (data.scope === "message") {
+      refreshRooms();
+      // Refresh the open room only when at the bottom, so reading history isn't disrupted.
+      if (room && data.roomId === room.id && atBottom && !jumped) {
+        listMessages(room.id, { limit: 40 })
+          .then((page) => {
+            stickBottom.current = true;
+            setMessages(page.messages);
+            setCursor(page.nextCursor);
+            setHasMore(page.hasMore);
+          })
+          .catch(() => {});
+      }
+    }
+  };
+  const realtimeRef = useRef(onRealtime);
+  realtimeRef.current = onRealtime;
+  useEffect(() => {
+    if (status !== "ready") return;
+    const es = new EventSource(eventsUrl());
+    const on = (e: MessageEvent) => realtimeRef.current(e);
+    es.addEventListener("change", on);
+    return () => {
+      es.removeEventListener("change", on);
+      es.close();
+    };
+  }, [status]);
 
   useEffect(() => {
     if (

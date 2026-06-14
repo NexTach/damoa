@@ -1,6 +1,12 @@
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 const TOKEN_KEY = "personae_token";
 
+// Stable per-tab id so the realtime stream can skip this device's own changes.
+export const CLIENT_ID =
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : String(Math.random());
+
 export const getToken = (): string | null =>
   typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY);
 export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
@@ -8,6 +14,10 @@ export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 /** DataGSM 로그인 시작 (백엔드가 authorize 로 리다이렉트) */
 export const loginUrl = () => `${BASE}/api/auth/datagsm/start`;
+
+/** SSE 실시간 스트림 URL (EventSource는 헤더 불가 → 토큰을 쿼리로). */
+export const eventsUrl = () =>
+  `${BASE}/api/personae/events?token=${encodeURIComponent(getToken() ?? "")}`;
 
 export type Me = { id: number; name: string; email: string };
 export type Persona = {
@@ -46,6 +56,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      "X-Client-Id": CLIENT_ID,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },

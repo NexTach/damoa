@@ -19,8 +19,15 @@ class JwtAuthFilter(
         filterChain: FilterChain,
     ) {
         val header = request.getHeader("Authorization")
-        if (header != null && header.startsWith("Bearer ")) {
-            val userId = jwtService.validate(header.substring(7))
+        // EventSource can't send headers, so the SSE stream authenticates via ?token=.
+        val token =
+            if (header != null && header.startsWith("Bearer ")) {
+                header.substring(7)
+            } else {
+                request.getParameter("token")
+            }
+        if (token != null) {
+            val userId = jwtService.validate(token)
             if (userId != null) {
                 val auth = UsernamePasswordAuthenticationToken(userId.toString(), null, emptyList())
                 SecurityContextHolder.getContext().authentication = auth

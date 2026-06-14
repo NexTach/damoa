@@ -6,12 +6,15 @@ import io.github.snowykte0426.damoa.personae.message.dto.response.MessagePage
 import io.github.snowykte0426.damoa.personae.message.dto.response.MessageResponse
 import io.github.snowykte0426.damoa.personae.message.dto.response.SearchResult
 import io.github.snowykte0426.damoa.personae.message.service.MessageService
+import io.github.snowykte0426.damoa.personae.realtime.dto.response.RealtimeEvent
+import io.github.snowykte0426.damoa.personae.realtime.service.RealtimeService
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -21,6 +24,7 @@ import java.time.Instant
 @RequestMapping("/api/personae/rooms/{roomId}/messages")
 class MessageController(
     private val service: MessageService,
+    private val realtime: RealtimeService,
 ) {
     @GetMapping
     fun list(
@@ -53,18 +57,35 @@ class MessageController(
     fun create(
         @PathVariable roomId: Long,
         @RequestBody req: MessageRequest,
-    ): MessageResponse = service.create(currentUserId(), roomId, req)
+        @RequestHeader(value = "X-Client-Id", required = false) clientId: String?,
+    ): MessageResponse {
+        val uid = currentUserId()
+        val res = service.create(uid, roomId, req)
+        realtime.publish(uid, RealtimeEvent("message", roomId, clientId))
+        return res
+    }
 
     @PatchMapping("/{messageId}")
     fun update(
         @PathVariable roomId: Long,
         @PathVariable messageId: Long,
         @RequestBody req: MessageRequest,
-    ): MessageResponse = service.update(currentUserId(), roomId, messageId, req)
+        @RequestHeader(value = "X-Client-Id", required = false) clientId: String?,
+    ): MessageResponse {
+        val uid = currentUserId()
+        val res = service.update(uid, roomId, messageId, req)
+        realtime.publish(uid, RealtimeEvent("message", roomId, clientId))
+        return res
+    }
 
     @DeleteMapping("/{messageId}")
     fun delete(
         @PathVariable roomId: Long,
         @PathVariable messageId: Long,
-    ) = service.delete(currentUserId(), roomId, messageId)
+        @RequestHeader(value = "X-Client-Id", required = false) clientId: String?,
+    ) {
+        val uid = currentUserId()
+        service.delete(uid, roomId, messageId)
+        realtime.publish(uid, RealtimeEvent("message", roomId, clientId))
+    }
 }
