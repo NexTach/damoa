@@ -74,6 +74,72 @@ const tm = <T>(path: string, init?: RequestInit) =>
 
 export const isAuthError = (e: unknown) => e instanceof AuthError;
 
+// ── Client-side encryption (AES-GCM). Server stores ciphertext; key per user. ──
+const ENC_PREFIX = "enc:v1:";
+let keyPromise: Promise<CryptoKey> | null = null;
+
+const b64encode = (buf: ArrayBuffer) =>
+  btoa(String.fromCharCode(...new Uint8Array(buf)));
+const b64decode = (s: string) =>
+  Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+const getKey = (): Promise<CryptoKey> => {
+  if (!keyPromise) {
+    keyPromise = (async () => {
+      const { key } = await tm<{ key: string }>("/key");
+      return crypto.subtle.importKey("raw", b64decode(key), "AES-GCM", false, [
+        "encrypt",
+        "decrypt",
+      ]);
+    })().catch((e) => {
+      keyPromise = null; // allow retry
+      throw e;
+    });
+  }
+  return keyPromise;
+};
+
+/** Encrypts text → "enc:v1:<iv>:<ct>". Empty stays empty. */
+export const encryptText = async (plain: string): Promise<string> => {
+  if (!plain) return plain;
+  const key = await getKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(plain),
+  );
+  return `${ENC_PREFIX}${b64encode(iv.buffer)}:${b64encode(ct)}`;
+};
+
+/** Decrypts an "enc:v1:" token; legacy plaintext is returned as-is. */
+export const decryptText = async (token: string | null): Promise<string> => {
+  if (!token) return token ?? "";
+  if (!token.startsWith(ENC_PREFIX)) return token; // legacy plaintext
+  try {
+    const [, , ivB64, ctB64] = token.split(":");
+    const key = await getKey();
+    const pt = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: b64decode(ivB64) },
+      key,
+      b64decode(ctB64),
+    );
+    return new TextDecoder().decode(pt);
+  } catch {
+    return "🔒"; // undecryptable
+  }
+};
+
+/** Decrypts content + reply snapshot of a message in place. */
+export const decryptMessage = async (m: Message): Promise<Message> => ({
+  ...m,
+  content: await decryptText(m.content),
+  replyToText: m.replyToText ? await decryptText(m.replyToText) : m.replyToText,
+});
+
+export const hydrateMessages = (msgs: Message[]): Promise<Message[]> =>
+  Promise.all(msgs.map(decryptMessage));
+
 /** Public URL for a stored object key (used for persona avatars). */
 export const fileUrl = (key: string) => `${BASE}/api/files/${key}`;
 

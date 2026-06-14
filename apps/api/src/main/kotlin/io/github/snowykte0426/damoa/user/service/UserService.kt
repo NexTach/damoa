@@ -10,4 +10,7 @@ interface UserService {
     ): User
 
     fun get(id: Long): User?
+
+    /** Returns the user's base64 AES key, generating + persisting it on first use. */
+    fun encryptionKey(id: Long): String
 }

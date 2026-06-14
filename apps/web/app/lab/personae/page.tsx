@@ -41,15 +41,18 @@ import {
   createPersona,
   CLIENT_ID,
   createRoom,
+  decryptMessage,
   deleteMessage,
   deletePersona,
   deleteRoom,
+  encryptText,
   eventsUrl,
   fetchMe,
   fetchOg,
   FileTooLargeError,
   fileUrl,
   getToken,
+  hydrateMessages,
   isAuthError,
   listMessages,
   listPersonas,
@@ -421,7 +424,7 @@ function PersonaeInner() {
     const page = await listMessages(r.id, { limit: 40 });
     stickBottom.current = true;
     setJumped(false);
-    setMessages(page.messages);
+    setMessages(await hydrateMessages(page.messages));
     setCursor(page.nextCursor);
     setHasMore(page.hasMore);
     setSender(r.selfPersonaId ?? r.participantPersonaIds[0] ?? null);
@@ -434,7 +437,7 @@ function PersonaeInner() {
     const page = await listMessages(room.id, { limit: 50, at: messageId });
     scrollToId.current = messageId;
     setJumped(true);
-    setMessages(page.messages);
+    setMessages(await hydrateMessages(page.messages));
     setCursor(page.nextCursor);
     setHasMore(page.hasMore);
     setHighlightId(messageId);
@@ -448,8 +451,9 @@ function PersonaeInner() {
     try {
       const page = await listMessages(room.id, { limit: 40, before: cursor });
       if (page.messages.length) {
+        const older = await hydrateMessages(page.messages);
         keepScroll.current = scrollRef.current?.scrollHeight ?? null;
-        setMessages((cur) => [...page.messages, ...cur]);
+        setMessages((cur) => [...older, ...cur]);
       }
       setCursor(page.nextCursor);
       setHasMore(page.hasMore);
@@ -472,7 +476,7 @@ function PersonaeInner() {
       setJumped(false);
       stickBottom.current = true;
       const page = await listMessages(room.id, { limit: 40 });
-      setMessages(page.messages);
+      setMessages(await hydrateMessages(page.messages));
       setCursor(page.nextCursor);
       setHasMore(page.hasMore);
     } else {
@@ -507,9 +511,10 @@ function PersonaeInner() {
       // Refresh the open room only when at the bottom, so reading history isn't disrupted.
       if (room && data.roomId === room.id && atBottom && !jumped) {
         listMessages(room.id, { limit: 40 })
-          .then((page) => {
+          .then(async (page) => {
+            const msgs = await hydrateMessages(page.messages);
             stickBottom.current = true;
-            setMessages(page.messages);
+            setMessages(msgs);
             setCursor(page.nextCursor);
             setHasMore(page.hasMore);
           })
@@ -687,9 +692,9 @@ function PersonaeInner() {
     if (!draft.trim() && !pending) return;
     setSending(true);
     try {
-      const msg = await createMessage(room.id, {
+      const created = await createMessage(room.id, {
         personaId: sender,
-        content: draft.trim(),
+        content: await encryptText(draft.trim()),
         attachmentKey: pending?.key,
         attachmentType: pending?.type,
         attachmentName: pending?.name ?? undefined,
@@ -697,8 +702,11 @@ function PersonaeInner() {
         replyToName: replyTo
           ? (personaBy(replyTo.personaId)?.name ?? "")
           : undefined,
-        replyToText: replyTo ? msgPreview(replyTo) : undefined,
+        replyToText: replyTo
+          ? await encryptText(msgPreview(replyTo))
+          : undefined,
       });
+      const msg = await decryptMessage(created);
       setDraft("");
       setReplyTo(null);
       if (pending) URL.revokeObjectURL(pending.url);
@@ -709,7 +717,7 @@ function PersonaeInner() {
         // message lands at the true bottom with correct context.
         setJumped(false);
         const page = await listMessages(room.id, { limit: 40 });
-        setMessages(page.messages);
+        setMessages(await hydrateMessages(page.messages));
         setCursor(page.nextCursor);
         setHasMore(page.hasMore);
       } else {
@@ -841,11 +849,12 @@ function PersonaeInner() {
     if (!room || !editing || sending) return;
     setSending(true);
     try {
-      const msg = await updateMessage(room.id, editing.id, {
+      const updated = await updateMessage(room.id, editing.id, {
         personaId: editing.personaId,
-        content: editing.content,
+        content: await encryptText(editing.content),
         sentAt: new Date(editing.at).toISOString(),
       });
+      const msg = await decryptMessage(updated);
       setMessages((cur) =>
         cur
           .map((m) => (m.id === msg.id ? msg : m))

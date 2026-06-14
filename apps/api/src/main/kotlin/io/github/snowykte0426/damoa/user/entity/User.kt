@@ -12,5 +12,6 @@ open class User(
     open var id: Long = 0, // DataGSM user id (assigned, not generated)
     open var email: String = "",
     open var name: String = "",
+    open var encKey: String? = null, // base64 AES-256 key for client-side message encryption
     open var createdAt: Instant = Instant.now(),
 )
