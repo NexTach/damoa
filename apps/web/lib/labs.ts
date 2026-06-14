@@ -43,9 +43,9 @@ export const LABS: Lab[] = [
     ready: true,
   },
   {
-    slug: "talkmaker",
+    slug: "personae",
     index: "05",
-    title: "Talkmaker",
+    title: "Personae",
     tag: "Persona",
     color: "#27e8a7",
     ready: true,

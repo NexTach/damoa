@@ -73,6 +73,6 @@ class DataGsmOAuthController(
         val info = client.userInfo(accessToken)
         val user = userService.upsert(info.id, info.email, info.name)
         val jwt = jwtService.issue(user.id, user.name, user.email)
-        response.sendRedirect("${props.frontendUrl}/lab/talkmaker#token=$jwt")
+        response.sendRedirect("${props.frontendUrl}/lab/personae#token=$jwt")
     }
 }

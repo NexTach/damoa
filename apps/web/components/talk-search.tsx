@@ -7,7 +7,7 @@ import {
   type MessageFilter,
   type Persona,
   searchMessages,
-} from "@/lib/talkmaker";
+} from "@/lib/personae";
 import { IconSearch, IconX } from "./icons";
 
 // yyyy-MM-dd (KST day boundary) → epoch millis.

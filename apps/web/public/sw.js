@@ -1,6 +1,6 @@
 // Minimal offline shell: network-first for navigations, cache fallback.
 const CACHE = "damoa-v1";
-const APP_SHELL = ["/", "/lab/talkmaker"];
+const APP_SHELL = ["/", "/lab/personae"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

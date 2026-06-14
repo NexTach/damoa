@@ -38,7 +38,7 @@ server:
   # nginx/Cloudflare 프록시 뒤에서 동작하므로 forwarded 헤더 신뢰
   forward-headers-strategy: framework
 
-# talkmaker / DataGSM OAuth / JWT 설정
+# personae / DataGSM OAuth / JWT 설정
 app:
   jwt-secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef0123456789abcdef}
   frontend-url: ${APP_FRONTEND_URL:http://localhost:3000}

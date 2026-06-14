@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "damoa — interactive lab",
     short_name: "damoa",
-    description: "Next.js로 만든 인터랙티브 실험들 + Talkmaker.",
+    description: "Next.js로 만든 인터랙티브 실험들 + Personae.",
     start_url: "/",
     scope: "/",
     display: "standalone",
