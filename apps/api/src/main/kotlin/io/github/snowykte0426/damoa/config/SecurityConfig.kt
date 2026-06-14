@@ -28,7 +28,7 @@ class SecurityConfig(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
                 it
-                    .requestMatchers("/api/talkmaker/**")
+                    .requestMatchers("/api/personae/**")
                     .authenticated()
                     .anyRequest()
                     .permitAll()

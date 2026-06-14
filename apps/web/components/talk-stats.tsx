@@ -13,7 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { fetchRoomStats, isAuthError, type RoomStats } from "@/lib/talkmaker";
+import { fetchRoomStats, isAuthError, type RoomStats } from "@/lib/personae";
 import { IconX } from "./icons";
 
 const axis = { fontSize: 10, fill: "var(--muted)" } as const;
