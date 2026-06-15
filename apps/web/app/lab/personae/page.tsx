@@ -1464,7 +1464,7 @@ function PersonaeInner() {
                       onTouchMove={onMsgTouchMove}
                       onTouchEnd={(e) => onMsgTouchEnd(m, e)}
                       onContextMenu={(e) => onMsgContextMenu(m, e)}
-                      className={`flex max-w-[68%] select-none flex-col [-webkit-touch-callout:none] ${mine ? "items-end text-right" : "items-start"}`}
+                      className={`flex max-w-[68%] min-w-0 select-none flex-col [-webkit-touch-callout:none] ${mine ? "items-end text-right" : "items-start"}`}
                     >
                       {!mine && !grouped && (
                         <span className="mb-1 font-mono text-[10px] text-[var(--muted)]">
@@ -1545,7 +1545,7 @@ function PersonaeInner() {
                         <>
                           {m.content && (
                             <div
-                              className="whitespace-pre-wrap break-words rounded-2xl px-4 py-2 text-[14px] leading-relaxed"
+                              className="whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl px-4 py-2 text-[14px] leading-relaxed"
                               style={
                                 mine
                                   ? { background: "#27e8a7", color: "#04130d" }
@@ -2745,7 +2745,7 @@ function LetterView({
           </button>
         </div>
         <div className="letter-paper flex-1 overflow-y-auto px-6 py-6 sm:px-8 sm:py-7">
-          <p className="font-hand whitespace-pre-wrap break-words text-[27px] leading-[44px] text-[var(--fg)]">
+          <p className="font-hand whitespace-pre-wrap [overflow-wrap:anywhere] text-[27px] leading-[44px] text-[var(--fg)]">
             {message.content}
           </p>
         </div>
