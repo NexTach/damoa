@@ -368,6 +368,8 @@ function PersonaeInner() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [highlightsOpen, setHighlightsOpen] = useState(false);
   const [letter, setLetter] = useState<Message | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<number | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -397,6 +399,13 @@ function PersonaeInner() {
   const stickBottom = useRef(false);
   const keepScroll = useRef<number | null>(null);
   const busy = sending || uploading;
+
+  // Transient bottom toast (e.g. share-target feedback).
+  const notify = useCallback((msg: string, ms = 3000) => {
+    setNotice(msg);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), ms);
+  }, []);
 
   // Track the visual viewport so the layout fits above the mobile keyboard
   // (keeps the header/title fixed instead of scrolling out of view).
@@ -555,35 +564,62 @@ function PersonaeInner() {
     if (status !== "ready" || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("share-target") == null) return;
-    // Server-fallback path forwards shared text via the `t` query param.
+    // Server-fallback path forwards shared text via `t`, and flags a dropped
+    // file via `f` (files only survive the service-worker path).
     const sharedText = params.get("t") ?? "";
+    const droppedFile = params.get("f") === "1";
     history.replaceState(null, "", "/lab/personae");
-    if (sharedText) setDraft((d) => d || sharedText);
-    if (!("caches" in window)) return;
+    // Make sure the composer is visible so pre-filled content is seen.
+    if (!room && rooms.length) openRoom(rooms[0]);
     (async () => {
-      try {
-        const cache = await caches.open("damoa-share");
-        const metaRes = await cache.match("shared-meta");
-        if (metaRes) {
-          const meta = await metaRes.json();
-          const text = [meta.title, meta.text, meta.url]
-            .filter(Boolean)
-            .join("\n")
-            .trim();
-          if (text) setDraft((d) => d || text);
-          await cache.delete("shared-meta");
+      let gotText = false;
+      let gotFile = false;
+      if (sharedText) {
+        setDraft((d) => d || sharedText);
+        gotText = true;
+      }
+      if ("caches" in window) {
+        try {
+          const cache = await caches.open("damoa-share");
+          const metaRes = await cache.match("shared-meta");
+          if (metaRes) {
+            const meta = await metaRes.json();
+            const text = [meta.title, meta.text, meta.url]
+              .filter(Boolean)
+              .join("\n")
+              .trim();
+            if (text) {
+              setDraft((d) => d || text);
+              gotText = true;
+            }
+            await cache.delete("shared-meta");
+          }
+          const fileRes = await cache.match("shared-file");
+          if (fileRes) {
+            const blob = await fileRes.blob();
+            const name = decodeURIComponent(
+              fileRes.headers.get("x-filename") || "shared",
+            );
+            await cache.delete("shared-file");
+            gotFile = true;
+            pickFile(new File([blob], name, { type: blob.type }));
+          }
+        } catch {
+          // ignore — handled by the notice below
         }
-        const fileRes = await cache.match("shared-file");
-        if (fileRes) {
-          const blob = await fileRes.blob();
-          const name = decodeURIComponent(
-            fileRes.headers.get("x-filename") || "shared",
-          );
-          await cache.delete("shared-file");
-          pickFile(new File([blob], name, { type: blob.type }));
-        }
-      } catch {
-        // ignore — nothing to pre-fill
+      }
+      // Tell the user what happened (otherwise a share looks like a no-op).
+      if (gotFile || (gotText && !droppedFile)) {
+        notify("공유한 내용을 입력창에 담았어요");
+      } else if (droppedFile && !gotFile) {
+        notify(
+          "사진·파일 공유는 앱을 한 번 실행해 준비를 마친 뒤 다시 공유해 주세요",
+          5000,
+        );
+      } else if (gotText) {
+        notify("공유한 내용을 입력창에 담았어요");
+      } else {
+        notify("공유한 내용을 가져오지 못했어요");
       }
     })();
   }, [status]);
@@ -1628,6 +1664,13 @@ function PersonaeInner() {
           persona={personaBy(letter.personaId)}
           onClose={() => setLetter(null)}
         />
+      )}
+      {notice && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[150] flex justify-center px-4">
+          <div className="pointer-events-auto max-w-sm rounded-full border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-center font-mono text-[11px] leading-relaxed text-[var(--fg)] shadow-2xl">
+            {notice}
+          </div>
+        </div>
       )}
       {actionMsg && (
         <ActionSheet
