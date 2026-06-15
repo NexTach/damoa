@@ -9,13 +9,16 @@ const EMBED_LIMIT = 3 * 1024 * 1024;
 
 const SHARE_PAGE = "/lab/personae?share-target=1";
 
-function redirectInto(req: NextRequest, text: string, hadFile = false) {
+function redirectInto(req: NextRequest, text: string, hadFile = false, dbg = "") {
   const url = new URL("/lab/personae", req.nextUrl.origin);
   url.searchParams.set("share-target", "1");
   if (text) url.searchParams.set("t", text);
   // A file was shared but couldn't be forwarded (too large for the fallback);
   // the app shows a "open once, then re-share" hint.
   if (hadFile) url.searchParams.set("f", "1");
+  // Diagnostic: which form fields the browser actually sent (helps when a
+  // browser uses a different file field name than the manifest declares).
+  if (dbg) url.searchParams.set("dbg", dbg.slice(0, 120));
   return NextResponse.redirect(url, 303);
 }
 
@@ -55,14 +58,23 @@ function stashPage(b64: string, type: string, name: string, meta: string) {
 export async function POST(req: NextRequest) {
   let text = "";
   let file: File | null = null;
+  const fields: string[] = [];
   try {
     const form = await req.formData();
     text = [form.get("title"), form.get("text"), form.get("url")]
       .filter((v): v is string => typeof v === "string" && v.length > 0)
       .join("\n")
       .trim();
-    const f = form.get("shared");
-    if (typeof f !== "string" && f != null && f.size > 0) file = f;
+    // Pick up the file under ANY field name (some browsers, e.g. Samsung
+    // Internet, don't use the manifest-declared "shared" name).
+    for (const [name, value] of form.entries()) {
+      if (typeof value === "string") {
+        fields.push(`${name}:s`);
+      } else {
+        fields.push(`${name}:f${value.size}`);
+        if (!file && value.size > 0) file = value;
+      }
+    }
   } catch {
     // no parseable body — still redirect rather than 404
   }
@@ -80,7 +92,7 @@ export async function POST(req: NextRequest) {
       // fall through to the redirect
     }
   }
-  return redirectInto(req, text, file != null);
+  return redirectInto(req, text, file != null, fields.join(","));
 }
 
 export function GET(req: NextRequest) {

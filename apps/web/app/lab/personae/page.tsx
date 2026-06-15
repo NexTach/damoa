@@ -670,7 +670,11 @@ function PersonaeInner() {
           "serviceWorker" in navigator && navigator.serviceWorker.controller
             ? "sw"
             : "no-sw";
-        notify(`공유한 내용을 가져오지 못했어요 [${ctrl}/${diag}/ss=${ss}]`, 6000);
+        const dbg = params.get("dbg");
+        notify(
+          `공유한 내용을 가져오지 못했어요 [${ctrl}/${diag}/ss=${ss}${dbg ? `/${dbg}` : ""}]`,
+          8000,
+        );
       }
     })();
   }, [status]);
