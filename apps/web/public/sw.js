@@ -2,6 +2,11 @@
 const CACHE = "damoa-v1";
 const SHARE_CACHE = "damoa-share";
 const APP_SHELL = ["/", "/lab/personae"];
+// Root-relative cache keys so the SW, the share route, and the app page all
+// resolve to the SAME URL (a bare "shared-file" would resolve relative to each
+// context's path and never match).
+const SHARE_FILE_KEY = "/__share-file";
+const SHARE_META_KEY = "/__share-meta";
 
 // Web Share Target: stash the shared payload, then redirect into the app
 // (which reads it from SHARE_CACHE to pre-fill the composer).
@@ -15,7 +20,7 @@ async function handleShare(request) {
     };
     const cache = await caches.open(SHARE_CACHE);
     await cache.put(
-      "shared-meta",
+      SHARE_META_KEY,
       new Response(JSON.stringify(meta), {
         headers: { "content-type": "application/json" },
       }),
@@ -23,7 +28,7 @@ async function handleShare(request) {
     const file = form.get("shared");
     if (file && typeof file !== "string" && file.size) {
       await cache.put(
-        "shared-file",
+        SHARE_FILE_KEY,
         new Response(file, {
           headers: {
             "content-type": file.type || "application/octet-stream",
@@ -32,7 +37,7 @@ async function handleShare(request) {
         }),
       );
     } else {
-      await cache.delete("shared-file");
+      await cache.delete(SHARE_FILE_KEY);
     }
   } catch {
     // fall through to the redirect regardless

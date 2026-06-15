@@ -581,7 +581,7 @@ function PersonaeInner() {
       if ("caches" in window) {
         try {
           const cache = await caches.open("damoa-share");
-          const metaRes = await cache.match("shared-meta");
+          const metaRes = await cache.match("/__share-meta");
           if (metaRes) {
             const meta = await metaRes.json();
             const text = [meta.title, meta.text, meta.url]
@@ -592,15 +592,15 @@ function PersonaeInner() {
               setDraft((d) => d || text);
               gotText = true;
             }
-            await cache.delete("shared-meta");
+            await cache.delete("/__share-meta");
           }
-          const fileRes = await cache.match("shared-file");
+          const fileRes = await cache.match("/__share-file");
           if (fileRes) {
             const blob = await fileRes.blob();
             const name = decodeURIComponent(
               fileRes.headers.get("x-filename") || "shared",
             );
-            await cache.delete("shared-file");
+            await cache.delete("/__share-file");
             gotFile = true;
             pickFile(new File([blob], name, { type: blob.type }));
           }

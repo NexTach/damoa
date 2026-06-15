@@ -37,8 +37,8 @@ function stashPage(b64: string, type: string, name: string, meta: string) {
     var bin = atob(d.b64), bytes = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     var cache = await caches.open("damoa-share");
-    await cache.put("shared-file", new Response(new Blob([bytes], { type: d.type }), { headers: { "content-type": d.type, "x-filename": encodeURIComponent(d.name) } }));
-    if (d.meta) await cache.put("shared-meta", new Response(JSON.stringify({ text: d.meta }), { headers: { "content-type": "application/json" } }));
+    await cache.put("/__share-file", new Response(new Blob([bytes], { type: d.type }), { headers: { "content-type": d.type, "x-filename": encodeURIComponent(d.name) } }));
+    if (d.meta) await cache.put("/__share-meta", new Response(JSON.stringify({ text: d.meta }), { headers: { "content-type": "application/json" } }));
   } catch (e) {}
   go();
 })();
