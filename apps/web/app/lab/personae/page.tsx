@@ -581,7 +581,14 @@ function PersonaeInner() {
       if ("caches" in window) {
         try {
           const cache = await caches.open("damoa-share");
-          const metaRes = await cache.match("/__share-meta");
+          // Read current keys plus legacy ones a still-active older service
+          // worker may have written (it resolved bare keys to /shared-*).
+          const metaKeys = ["/__share-meta", "/shared-meta"];
+          const fileKeys = ["/__share-file", "/shared-file"];
+          let metaRes: Response | undefined;
+          for (const k of metaKeys) {
+            metaRes = metaRes ?? (await cache.match(k));
+          }
           if (metaRes) {
             const meta = await metaRes.json();
             const text = [meta.title, meta.text, meta.url]
@@ -592,15 +599,18 @@ function PersonaeInner() {
               setDraft((d) => d || text);
               gotText = true;
             }
-            await cache.delete("/__share-meta");
+            await Promise.all(metaKeys.map((k) => cache.delete(k)));
           }
-          const fileRes = await cache.match("/__share-file");
+          let fileRes: Response | undefined;
+          for (const k of fileKeys) {
+            fileRes = fileRes ?? (await cache.match(k));
+          }
           if (fileRes) {
             const blob = await fileRes.blob();
             const name = decodeURIComponent(
               fileRes.headers.get("x-filename") || "shared",
             );
-            await cache.delete("/__share-file");
+            await Promise.all(fileKeys.map((k) => cache.delete(k)));
             gotFile = true;
             pickFile(new File([blob], name, { type: blob.type }));
           }
