@@ -574,62 +574,70 @@ function PersonaeInner() {
     (async () => {
       let gotText = false;
       let gotFile = false;
+      let diag = "no-caches";
       if (sharedText) {
         setDraft((d) => d || sharedText);
         gotText = true;
       }
       if ("caches" in window) {
         try {
+          // Enumerate every entry so we read whatever any SW/route version wrote,
+          // regardless of the exact key it used.
           const cache = await caches.open("damoa-share");
-          // Read current keys plus legacy ones a still-active older service
-          // worker may have written (it resolved bare keys to /shared-*).
-          const metaKeys = ["/__share-meta", "/shared-meta"];
-          const fileKeys = ["/__share-file", "/shared-file"];
-          let metaRes: Response | undefined;
-          for (const k of metaKeys) {
-            metaRes = metaRes ?? (await cache.match(k));
-          }
-          if (metaRes) {
-            const meta = await metaRes.json();
-            const text = [meta.title, meta.text, meta.url]
-              .filter(Boolean)
-              .join("\n")
-              .trim();
-            if (text) {
-              setDraft((d) => d || text);
-              gotText = true;
+          const entries = await cache.keys();
+          diag = `n=${entries.length}`;
+          for (const req of entries) {
+            const res = await cache.match(req);
+            if (!res) continue;
+            const ct = res.headers.get("content-type") || "";
+            const hasFilename = !!res.headers.get("x-filename");
+            const looksMeta =
+              !hasFilename &&
+              (req.url.includes("meta") || ct.includes("application/json"));
+            if (looksMeta) {
+              try {
+                const meta = await res.json();
+                const text = [meta.title, meta.text, meta.url]
+                  .filter(Boolean)
+                  .join("\n")
+                  .trim();
+                if (text) {
+                  setDraft((d) => d || text);
+                  gotText = true;
+                }
+              } catch {
+                // not the meta we expected
+              }
+            } else {
+              const blob = await res.blob();
+              const name = decodeURIComponent(
+                res.headers.get("x-filename") ||
+                  req.url.split("/").pop() ||
+                  "shared",
+              );
+              gotFile = true;
+              pickFile(new File([blob], name, { type: blob.type || ct }));
             }
-            await Promise.all(metaKeys.map((k) => cache.delete(k)));
           }
-          let fileRes: Response | undefined;
-          for (const k of fileKeys) {
-            fileRes = fileRes ?? (await cache.match(k));
-          }
-          if (fileRes) {
-            const blob = await fileRes.blob();
-            const name = decodeURIComponent(
-              fileRes.headers.get("x-filename") || "shared",
-            );
-            await Promise.all(fileKeys.map((k) => cache.delete(k)));
-            gotFile = true;
-            pickFile(new File([blob], name, { type: blob.type }));
-          }
+          await Promise.all(entries.map((r) => cache.delete(r)));
         } catch {
-          // ignore — handled by the notice below
+          diag = "cache-error";
         }
       }
       // Tell the user what happened (otherwise a share looks like a no-op).
-      if (gotFile || (gotText && !droppedFile)) {
+      if (gotFile || gotText) {
         notify("공유한 내용을 입력창에 담았어요");
-      } else if (droppedFile && !gotFile) {
+      } else if (droppedFile) {
         notify(
           "사진·파일 공유는 앱을 한 번 실행해 준비를 마친 뒤 다시 공유해 주세요",
           5000,
         );
-      } else if (gotText) {
-        notify("공유한 내용을 입력창에 담았어요");
       } else {
-        notify("공유한 내용을 가져오지 못했어요");
+        const ctrl =
+          "serviceWorker" in navigator && navigator.serviceWorker.controller
+            ? "sw"
+            : "no-sw";
+        notify(`공유한 내용을 가져오지 못했어요 [${ctrl}/${diag}]`, 6000);
       }
     })();
   }, [status]);
