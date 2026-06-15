@@ -369,6 +369,7 @@ function PersonaeInner() {
   const [highlightsOpen, setHighlightsOpen] = useState(false);
   const [letter, setLetter] = useState<Message | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const noticeTimer = useRef<number | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -786,6 +787,80 @@ function PersonaeInner() {
       setSender(
         updated.selfPersonaId ?? updated.participantPersonaIds[0] ?? null,
       );
+  };
+
+  // Export the room as an OpenAI chat fine-tuning JSON. The chosen persona maps
+  // to "assistant", everyone else to "user". Messages are E2EE, so we decrypt
+  // them client-side here. Pulls the whole history page by page (oldest→newest).
+  const exportRoom = async (assistantId: number) => {
+    if (!room || exporting) return;
+    setExporting(true);
+    try {
+      let all: Message[] = [];
+      let before: string | undefined;
+      while (true) {
+        const page = await listMessages(room.id, { limit: 100, before });
+        all = [...(await hydrateMessages(page.messages)), ...all];
+        if (!page.hasMore || !page.nextCursor) break;
+        before = page.nextCursor;
+      }
+      const assistant = personaBy(assistantId);
+      const parts = room.participantPersonaIds
+        .map(personaBy)
+        .filter((p): p is Persona => !!p);
+      const marker = (m: Message) =>
+        m.attachmentExpired
+          ? "[만료된 파일]"
+          : m.attachmentType?.startsWith("image/")
+            ? "[사진]"
+            : m.attachmentType?.startsWith("video/")
+              ? "[동영상]"
+              : m.attachmentType?.startsWith("audio/")
+                ? "[오디오]"
+                : m.attachmentUrl
+                  ? `[파일${m.attachmentName ? `: ${m.attachmentName}` : ""}]`
+                  : "";
+      const intro = parts
+        .map((p) => `- ${p.name}${p.bio ? `: ${p.bio}` : ""}`)
+        .join("\n");
+      const messages: Record<string, unknown>[] = [
+        {
+          role: "system",
+          content: `다음은 등장인물 간의 대화입니다.\n${intro}\n\n'${assistant?.name ?? ""}'의 말투와 성격으로 응답하세요.`,
+        },
+      ];
+      for (const m of all) {
+        const mk = marker(m);
+        const text = m.content.trim();
+        const msg: Record<string, unknown> = {
+          role: m.personaId === assistantId ? "assistant" : "user",
+          content: [text, mk].filter(Boolean).join(text && mk ? " " : ""),
+          speaker: personaBy(m.personaId)?.name ?? "",
+          at: m.sentAt,
+        };
+        if (m.replyToId)
+          msg.reply_to = { speaker: m.replyToName, text: m.replyToText };
+        messages.push(msg);
+      }
+      const safe = (s: string) =>
+        s.replace(/[^\w가-힣.-]+/g, "_").slice(0, 40) || "export";
+      const blob = new Blob([JSON.stringify({ messages }, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `personae-${safe(room.title)}-${safe(assistant?.name ?? "")}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      notify(`JSON 추출 완료 (${all.length}개 메시지)`);
+    } catch {
+      notify("추출에 실패했어요");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const pickFile = async (file: File | null) => {
@@ -1277,6 +1352,8 @@ function PersonaeInner() {
               room={room}
               personas={personas}
               onPatch={patchRoom}
+              onExport={exportRoom}
+              exporting={exporting}
               onClose={() => setSettingsOpen(false)}
             />
           )}
@@ -2120,13 +2197,18 @@ function RoomSettings({
   room,
   personas,
   onPatch,
+  onExport,
+  exporting,
   onClose,
 }: {
   room: Room;
   personas: Persona[];
   onPatch: (patch: Partial<Room>) => void;
+  onExport: (assistantId: number) => void;
+  exporting: boolean;
   onClose: () => void;
 }) {
+  const personaBy = (id: number) => personas.find((p) => p.id === id);
   const [title, setTitle] = useState(room.title);
   const saveTitle = () => {
     const t = title.trim();
@@ -2229,6 +2311,41 @@ function RoomSettings({
             );
           })}
         </div>
+
+        {/* AI 학습용 JSON 추출 — 고른 페르소나를 assistant 로 매핑 */}
+        {room.participantPersonaIds.length > 0 && (
+          <div className="mt-4 border-t border-[var(--line)] pt-3">
+            <div className="pb-2 font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
+              AI 학습용 JSON 추출
+            </div>
+            <p className="pb-2 font-mono text-[10px] leading-relaxed text-[var(--muted)]">
+              학습 대상(assistant)으로 둘 페르소나를 고르면 OpenAI 채팅
+              파인튜닝형 JSON으로 내려받아요.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {room.participantPersonaIds.map((pid) => {
+                const p = personaBy(pid);
+                return (
+                  <button
+                    key={pid}
+                    type="button"
+                    disabled={exporting}
+                    onClick={() => onExport(pid)}
+                    className="flex items-center gap-1.5 rounded-full border border-[var(--line)] px-2.5 py-1 font-mono text-[11px] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-40"
+                  >
+                    <IconDownload size={12} />
+                    {p?.name}
+                  </button>
+                );
+              })}
+            </div>
+            {exporting && (
+              <div className="pt-2 font-mono text-[10px] text-[var(--muted)]">
+                추출 중…
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
