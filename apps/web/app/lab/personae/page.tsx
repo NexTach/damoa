@@ -574,16 +574,14 @@ function PersonaeInner() {
     (async () => {
       let gotText = false;
       let gotFile = false;
-      let diag = "no-caches";
-      let ss = "0";
       if (sharedText) {
         setDraft((d) => d || sharedText);
         gotText = true;
       }
-      // Primary handoff (server fallback / no service worker): sessionStorage.
+      // Primary handoff (server fallback / no service worker): sessionStorage,
+      // which reliably survives the same-tab redirect from the share route.
       try {
         const raw = sessionStorage.getItem("personae:share");
-        ss = raw ? String(raw.length) : "0";
         if (raw) {
           sessionStorage.removeItem("personae:share");
           const d = JSON.parse(raw) as {
@@ -609,16 +607,13 @@ function PersonaeInner() {
           }
         }
       } catch {
-        ss = "err";
-        // sessionStorage unavailable or bad payload — fall back to cache below
+        // sessionStorage unavailable — fall back to the cache below
       }
+      // Service-worker path: read whatever it stashed, regardless of key.
       if (!gotFile && "caches" in window) {
         try {
-          // Enumerate every entry so we read whatever any SW/route version wrote,
-          // regardless of the exact key it used.
           const cache = await caches.open("damoa-share");
           const entries = await cache.keys();
-          diag = `n=${entries.length}`;
           for (const req of entries) {
             const res = await cache.match(req);
             if (!res) continue;
@@ -654,7 +649,7 @@ function PersonaeInner() {
           }
           await Promise.all(entries.map((r) => cache.delete(r)));
         } catch {
-          diag = "cache-error";
+          // nothing usable in the cache
         }
       }
       // Tell the user what happened (otherwise a share looks like a no-op).
@@ -666,15 +661,7 @@ function PersonaeInner() {
           5000,
         );
       } else {
-        const ctrl =
-          "serviceWorker" in navigator && navigator.serviceWorker.controller
-            ? "sw"
-            : "no-sw";
-        const dbg = params.get("dbg");
-        notify(
-          `공유한 내용을 가져오지 못했어요 [${ctrl}/${diag}/ss=${ss}${dbg ? `/${dbg}` : ""}]`,
-          8000,
-        );
+        notify("공유한 내용을 가져오지 못했어요");
       }
     })();
   }, [status]);
@@ -1643,6 +1630,16 @@ function PersonaeInner() {
                 ref={composerRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                onPaste={(e) => {
+                  // Paste an image/file from the clipboard → attach it.
+                  const file = Array.from(e.clipboardData.items)
+                    .find((it) => it.kind === "file")
+                    ?.getAsFile();
+                  if (file && sender != null && !busy) {
+                    e.preventDefault();
+                    pickFile(file);
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
