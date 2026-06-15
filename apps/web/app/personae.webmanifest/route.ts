@@ -11,7 +11,8 @@ export function GET() {
     start_url: "/lab/personae",
     scope: "/lab/personae",
     display: "standalone",
-    orientation: "any",
+    // No `orientation` → follow the device's rotation/auto-rotate setting
+    // (locking it to "any" would rotate freely and ignore the OS lock).
     background_color: "#08080a",
     theme_color: "#08080a",
     // Appear in the OS share sheet. The service worker intercepts this POST,
