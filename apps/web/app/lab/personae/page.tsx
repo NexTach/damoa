@@ -820,13 +820,17 @@ function PersonaeInner() {
                 : m.attachmentUrl
                   ? `[파일${m.attachmentName ? `: ${m.attachmentName}` : ""}]`
                   : "";
-      const intro = parts
-        .map((p) => `- ${p.name}${p.bio ? `: ${p.bio}` : ""}`)
+      const name = assistant?.name ?? "assistant";
+      // Only list bios that exist, to avoid an awkward bare list of (possibly
+      // duplicate) names. Frame it as the assistant talking to the others.
+      const bios = parts
+        .filter((p) => p.bio?.trim())
+        .map((p) => `- ${p.name}: ${p.bio}`)
         .join("\n");
       const messages: Record<string, unknown>[] = [
         {
           role: "system",
-          content: `다음은 등장인물 간의 대화입니다.\n${intro}\n\n'${assistant?.name ?? ""}'의 말투와 성격으로 응답하세요.`,
+          content: `다음은 '${name}'와(과) 다른 참여자들의 대화입니다.${bios ? `\n${bios}` : ""}\n\n'${name}'의 말투와 성격으로 응답하세요.`,
         },
       ];
       for (const m of all) {
@@ -843,21 +847,34 @@ function PersonaeInner() {
         messages.push(msg);
       }
       const safe = (s: string) =>
-        s.replace(/[^\w가-힣.-]+/g, "_").slice(0, 40) || "export";
+        s.replace(/[^\w가-힣.-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) ||
+        "chat";
+      const filename = `personae-${safe(room.title)}-${safe(name)}.json`;
       const blob = new Blob([JSON.stringify({ messages }, null, 2)], {
         type: "application/json",
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `personae-${safe(room.title)}-${safe(assistant?.name ?? "")}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      // Prefer the native share sheet on mobile (blob downloads are unreliable
+      // there); fall back to a normal anchor download elsewhere.
+      const file = new File([blob], filename, { type: "application/json" });
+      const nav = navigator as Navigator & {
+        canShare?: (d: { files: File[] }) => boolean;
+      };
+      if (nav.canShare?.({ files: [file] })) {
+        await nav.share({ files: [file], title: filename });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
       notify(`JSON 추출 완료 (${all.length}개 메시지)`);
-    } catch {
-      notify("추출에 실패했어요");
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return; // user cancelled share
+      notify(`추출 실패: ${e instanceof Error ? e.message : "오류"}`, 6000);
     } finally {
       setExporting(false);
     }
