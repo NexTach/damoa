@@ -32,8 +32,12 @@ function stashPage(b64: string, type: string, name: string, meta: string) {
   const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>공유 처리 중…</title></head><body style="background:#08080a;color:#7d7d76;font-family:monospace;display:grid;place-items:center;height:100vh;margin:0">공유한 내용을 여는 중…<script>
 (async () => {
   var go = function(){ location.replace(${JSON.stringify(SHARE_PAGE)}); };
+  var d = ${data};
+  // Primary handoff: sessionStorage survives the same-tab redirect even with no
+  // service worker (Samsung Internet etc. don't share CacheStorage here).
+  try { sessionStorage.setItem("personae:share", JSON.stringify(d)); } catch (e) {}
+  // Secondary: also stash in CacheStorage for browsers where the SW path is used.
   try {
-    var d = ${data};
     var bin = atob(d.b64), bytes = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     var cache = await caches.open("damoa-share");

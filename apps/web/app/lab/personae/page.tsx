@@ -575,11 +575,44 @@ function PersonaeInner() {
       let gotText = false;
       let gotFile = false;
       let diag = "no-caches";
+      let ss = "0";
       if (sharedText) {
         setDraft((d) => d || sharedText);
         gotText = true;
       }
-      if ("caches" in window) {
+      // Primary handoff (server fallback / no service worker): sessionStorage.
+      try {
+        const raw = sessionStorage.getItem("personae:share");
+        ss = raw ? String(raw.length) : "0";
+        if (raw) {
+          sessionStorage.removeItem("personae:share");
+          const d = JSON.parse(raw) as {
+            b64?: string;
+            type?: string;
+            name?: string;
+            meta?: string;
+          };
+          if (d.meta) {
+            setDraft((cur) => cur || d.meta || "");
+            gotText = true;
+          }
+          if (d.b64) {
+            const bin = atob(d.b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            gotFile = true;
+            pickFile(
+              new File([bytes], d.name || "shared", {
+                type: d.type || "application/octet-stream",
+              }),
+            );
+          }
+        }
+      } catch {
+        ss = "err";
+        // sessionStorage unavailable or bad payload — fall back to cache below
+      }
+      if (!gotFile && "caches" in window) {
         try {
           // Enumerate every entry so we read whatever any SW/route version wrote,
           // regardless of the exact key it used.
@@ -637,7 +670,7 @@ function PersonaeInner() {
           "serviceWorker" in navigator && navigator.serviceWorker.controller
             ? "sw"
             : "no-sw";
-        notify(`공유한 내용을 가져오지 못했어요 [${ctrl}/${diag}]`, 6000);
+        notify(`공유한 내용을 가져오지 못했어요 [${ctrl}/${diag}/ss=${ss}]`, 6000);
       }
     })();
   }, [status]);
