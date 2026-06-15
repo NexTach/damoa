@@ -8,7 +8,12 @@ export function SwRegister() {
     if (process.env.NODE_ENV !== "production") return;
     if (!("serviceWorker" in navigator)) return;
     const onLoad = () => {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      // updateViaCache:"none" → always fetch sw.js fresh on update checks so a
+      // new worker (e.g. with the share-target handler) activates promptly.
+      navigator.serviceWorker
+        .register("/sw.js", { updateViaCache: "none" })
+        .then((reg) => reg.update())
+        .catch(() => {});
     };
     window.addEventListener("load", onLoad);
     return () => window.removeEventListener("load", onLoad);

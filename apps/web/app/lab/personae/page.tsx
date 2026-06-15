@@ -553,9 +553,12 @@ function PersonaeInner() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once when ready
   useEffect(() => {
     if (status !== "ready" || typeof window === "undefined") return;
-    if (new URLSearchParams(window.location.search).get("share-target") == null)
-      return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("share-target") == null) return;
+    // Server-fallback path forwards shared text via the `t` query param.
+    const sharedText = params.get("t") ?? "";
     history.replaceState(null, "", "/lab/personae");
+    if (sharedText) setDraft((d) => d || sharedText);
     if (!("caches" in window)) return;
     (async () => {
       try {
