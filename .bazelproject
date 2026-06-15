@@ -3,6 +3,13 @@ directories:
   apps/web
   tools
   bazel
+  .claude
+  .agents
+  .codex
+  .harness
+  .github
+  .idea
+  node_modules
 
 derive_targets_from_directories: false
 
