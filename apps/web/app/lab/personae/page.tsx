@@ -548,6 +548,43 @@ function PersonaeInner() {
     };
   }, [status]);
 
+  // Web Share Target: when launched via the OS share sheet, the service worker
+  // stashed the payload in a cache — read it to pre-fill the composer.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once when ready
+  useEffect(() => {
+    if (status !== "ready" || typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("share-target") == null)
+      return;
+    history.replaceState(null, "", "/lab/personae");
+    if (!("caches" in window)) return;
+    (async () => {
+      try {
+        const cache = await caches.open("damoa-share");
+        const metaRes = await cache.match("shared-meta");
+        if (metaRes) {
+          const meta = await metaRes.json();
+          const text = [meta.title, meta.text, meta.url]
+            .filter(Boolean)
+            .join("\n")
+            .trim();
+          if (text) setDraft((d) => d || text);
+          await cache.delete("shared-meta");
+        }
+        const fileRes = await cache.match("shared-file");
+        if (fileRes) {
+          const blob = await fileRes.blob();
+          const name = decodeURIComponent(
+            fileRes.headers.get("x-filename") || "shared",
+          );
+          await cache.delete("shared-file");
+          pickFile(new File([blob], name, { type: blob.type }));
+        }
+      } catch {
+        // ignore — nothing to pre-fill
+      }
+    })();
+  }, [status]);
+
   useEffect(() => {
     if (
       typeof window !== "undefined" &&
@@ -947,7 +984,7 @@ function PersonaeInner() {
     >
       {/* 사이드바 — 모바일에선 방이 열리면 숨기고 채팅을 전체폭으로 */}
       <aside
-        className={`${room ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-[var(--line)] bg-[var(--bg-2)] md:w-72`}
+        className={`${room ? "hidden wide:flex" : "flex"} w-full shrink-0 flex-col border-r border-[var(--line)] bg-[var(--bg-2)] wide:w-72`}
       >
         <div className="flex items-center justify-between p-4">
           <div>
@@ -1039,7 +1076,7 @@ function PersonaeInner() {
 
       {/* 메인 */}
       {!room ? (
-        <div className="hidden flex-1 place-items-center font-mono text-xs tracking-[0.3em] text-[var(--muted)] md:grid">
+        <div className="hidden flex-1 place-items-center font-mono text-xs tracking-[0.3em] text-[var(--muted)] wide:grid">
           채팅방을 선택하거나 + 로 만드세요
         </div>
       ) : (
@@ -1090,7 +1127,7 @@ function PersonaeInner() {
                   type="button"
                   onClick={() => setRoom(null)}
                   aria-label="목록으로"
-                  className="shrink-0 text-[var(--muted)] hover:text-[var(--fg)] md:hidden"
+                  className="shrink-0 text-[var(--muted)] hover:text-[var(--fg)] wide:hidden"
                 >
                   <IconArrowLeft size={20} />
                 </button>
@@ -2011,16 +2048,16 @@ function RoomSettings({
     });
   };
   return (
-    <div className="fixed inset-0 z-[70] md:absolute md:inset-auto md:right-6 md:top-16">
+    <div className="fixed inset-0 z-[70] wide:absolute wide:inset-auto wide:right-6 wide:top-16">
       {/* Mobile backdrop (desktop is a popover, no dimming). */}
       <button
         type="button"
         aria-label="닫기"
         onClick={onClose}
-        className="absolute inset-0 bg-black/40 md:hidden"
+        className="absolute inset-0 bg-black/40 wide:hidden"
       />
-      <div className="pb-safe sheet-up absolute inset-x-0 bottom-0 max-h-[80vh] overflow-y-auto rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-4 shadow-2xl md:static md:max-h-none md:w-72 md:rounded-xl">
-        <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--line)] md:hidden" />
+      <div className="pb-safe sheet-up absolute inset-x-0 bottom-0 max-h-[80vh] overflow-y-auto rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-4 shadow-2xl wide:static wide:max-h-none wide:w-72 wide:rounded-xl">
+        <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--line)] wide:hidden" />
         <div className="flex items-center justify-between pb-1">
           <span className="font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
             제목

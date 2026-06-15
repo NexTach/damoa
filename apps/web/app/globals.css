@@ -5,6 +5,14 @@
   --font-mono: var(--type-mono), ui-monospace, "SFMono-Regular", monospace;
 }
 
+/* "넓은" 뷰포트 = 데스크톱 2단 레이아웃: 폭 768px 이상이거나,
+   가로(landscape)이면서 600px 이상(가로 폰·태블릿). 세로 폰만 1단. */
+@custom-variant wide {
+  @media (min-width: 768px), (min-width: 600px) and (orientation: landscape) {
+    @slot;
+  }
+}
+
 :root {
   --bg: #08080a;
   --bg-2: #0f0f13;

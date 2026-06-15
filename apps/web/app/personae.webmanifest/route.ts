@@ -11,9 +11,33 @@ export function GET() {
     start_url: "/lab/personae",
     scope: "/lab/personae",
     display: "standalone",
-    orientation: "portrait",
+    orientation: "any",
     background_color: "#08080a",
     theme_color: "#08080a",
+    // Appear in the OS share sheet. The service worker intercepts this POST,
+    // stashes the payload, and redirects into the app to pre-fill the composer.
+    share_target: {
+      action: "/lab/personae/share",
+      method: "POST",
+      enctype: "multipart/form-data",
+      params: {
+        title: "title",
+        text: "text",
+        url: "url",
+        files: [
+          {
+            name: "shared",
+            accept: [
+              "image/*",
+              "video/*",
+              "audio/*",
+              "text/*",
+              "application/*",
+            ],
+          },
+        ],
+      },
+    },
     icons: [
       { src: "/icons/personae.svg", sizes: "any", type: "image/svg+xml" },
       {
