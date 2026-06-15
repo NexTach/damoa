@@ -37,7 +37,10 @@ async function handleShare(request) {
   } catch {
     // fall through to the redirect regardless
   }
-  return Response.redirect("/lab/personae?share-target=1", 303);
+  // Response.redirect requires an absolute URL — a relative one throws, which
+  // would reject respondWith and fall back to the network (Vercel 404).
+  const target = new URL("/lab/personae?share-target=1", self.location.origin);
+  return Response.redirect(target.href, 303);
 }
 
 self.addEventListener("install", (event) => {
