@@ -820,17 +820,38 @@ function PersonaeInner() {
                 : m.attachmentUrl
                   ? `[파일${m.attachmentName ? `: ${m.attachmentName}` : ""}]`
                   : "";
-      const name = assistant?.name ?? "assistant";
-      // Only list bios that exist, to avoid an awkward bare list of (possibly
-      // duplicate) names. Frame it as the assistant talking to the others.
+      // Personas often share a name (e.g. the account default), so disambiguate
+      // duplicates with a suffix and use that consistently as the display name.
+      const total = new Map<string, number>();
+      for (const p of parts) {
+        const b = p.name?.trim() || "이름없음";
+        total.set(b, (total.get(b) ?? 0) + 1);
+      }
+      const seen = new Map<string, number>();
+      const dispName = new Map<number, string>();
+      for (const p of parts) {
+        const b = p.name?.trim() || "이름없음";
+        const i = (seen.get(b) ?? 0) + 1;
+        seen.set(b, i);
+        dispName.set(p.id, (total.get(b) ?? 0) > 1 ? `${b} (${i})` : b);
+      }
+      const nameOf = (id: number) =>
+        dispName.get(id) || personaBy(id)?.name?.trim() || "이름없음";
+
+      const name = nameOf(assistantId);
+      // Only list bios that exist, to avoid an awkward bare list of names.
       const bios = parts
         .filter((p) => p.bio?.trim())
-        .map((p) => `- ${p.name}: ${p.bio}`)
+        .map((p) => `- ${nameOf(p.id)}: ${p.bio}`)
         .join("\n");
+      const others = parts
+        .filter((p) => p.id !== assistantId)
+        .map((p) => `'${nameOf(p.id)}'`)
+        .join(", ");
       const messages: Record<string, unknown>[] = [
         {
           role: "system",
-          content: `다음은 '${name}'와(과) 다른 참여자들의 대화입니다.${bios ? `\n${bios}` : ""}\n\n'${name}'의 말투와 성격으로 응답하세요.`,
+          content: `다음은 '${name}'와(과) 다른 참여자(${others || "상대"})의 대화입니다.${bios ? `\n${bios}` : ""}\n\n'${name}'의 말투와 성격으로 응답하세요.`,
         },
       ];
       for (const m of all) {
@@ -839,7 +860,7 @@ function PersonaeInner() {
         const msg: Record<string, unknown> = {
           role: m.personaId === assistantId ? "assistant" : "user",
           content: [text, mk].filter(Boolean).join(text && mk ? " " : ""),
-          speaker: personaBy(m.personaId)?.name ?? "",
+          speaker: nameOf(m.personaId),
           at: m.sentAt,
         };
         if (m.replyToId)
