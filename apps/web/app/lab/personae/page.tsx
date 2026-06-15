@@ -1065,7 +1065,7 @@ function PersonaeInner() {
     >
       {/* 사이드바 — 모바일에선 방이 열리면 숨기고 채팅을 전체폭으로 */}
       <aside
-        className={`${room ? "hidden wide:flex" : "flex"} w-full shrink-0 flex-col border-r border-[var(--line)] bg-[var(--bg-2)] wide:w-72`}
+        className={`${capture ? "hidden" : room ? "hidden wide:flex" : "flex"} w-full shrink-0 flex-col border-r border-[var(--line)] bg-[var(--bg-2)] wide:w-72`}
       >
         <div className="flex items-center justify-between p-4">
           <div>
