@@ -47,4 +47,18 @@ interface MessageService {
         roomId: Long,
         messageId: Long,
     )
+
+    /** Highlighted (pinned) messages of a room — never auto-expire. */
+    fun listPinned(
+        ownerId: Long,
+        roomId: Long,
+    ): List<MessageResponse>
+
+    /** Toggles a message's highlight (pin) state. */
+    fun setPin(
+        ownerId: Long,
+        roomId: Long,
+        messageId: Long,
+        pinned: Boolean,
+    ): MessageResponse
 }

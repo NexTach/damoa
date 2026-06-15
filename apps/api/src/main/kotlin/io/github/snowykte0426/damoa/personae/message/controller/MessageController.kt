@@ -2,6 +2,7 @@ package io.github.snowykte0426.damoa.personae.message.controller
 
 import io.github.snowykte0426.damoa.common.currentUserId
 import io.github.snowykte0426.damoa.personae.message.dto.request.MessageRequest
+import io.github.snowykte0426.damoa.personae.message.dto.request.PinRequest
 import io.github.snowykte0426.damoa.personae.message.dto.response.MessagePage
 import io.github.snowykte0426.damoa.personae.message.dto.response.MessageResponse
 import io.github.snowykte0426.damoa.personae.message.dto.response.SearchResult
@@ -52,6 +53,24 @@ class MessageController(
             before?.let(Instant::ofEpochMilli),
             cursor,
         )
+
+    @GetMapping("/pinned")
+    fun pinned(
+        @PathVariable roomId: Long,
+    ): List<MessageResponse> = service.listPinned(currentUserId(), roomId)
+
+    @PatchMapping("/{messageId}/pin")
+    fun pin(
+        @PathVariable roomId: Long,
+        @PathVariable messageId: Long,
+        @RequestBody req: PinRequest,
+        @RequestHeader(value = "X-Client-Id", required = false) clientId: String?,
+    ): MessageResponse {
+        val uid = currentUserId()
+        val res = service.setPin(uid, roomId, messageId, req.pinned)
+        realtime.publish(uid, RealtimeEvent("message", roomId, clientId))
+        return res
+    }
 
     @PostMapping
     fun create(

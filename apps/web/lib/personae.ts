@@ -42,6 +42,7 @@ export type Message = {
   attachmentType: string | null;
   attachmentName: string | null;
   attachmentExpired: boolean;
+  pinned: boolean;
   replyToId: number | null;
   replyToName: string | null;
   replyToText: string | null;
@@ -281,3 +282,18 @@ export const uploadAttachment = async (
 };
 export const deleteMessage = (roomId: number, messageId: number) =>
   tm<void>(`/rooms/${roomId}/messages/${messageId}`, { method: "DELETE" });
+
+/** Highlighted (pinned) messages of a room — their attachments never expire. */
+export const listPinned = (roomId: number) =>
+  tm<Message[]>(`/rooms/${roomId}/messages/pinned`);
+
+/** Toggles a message's highlight (pin) state. */
+export const pinMessage = (
+  roomId: number,
+  messageId: number,
+  pinned: boolean,
+) =>
+  tm<Message>(`/rooms/${roomId}/messages/${messageId}/pin`, {
+    method: "PATCH",
+    body: JSON.stringify({ pinned }),
+  });

@@ -24,5 +24,16 @@ export default function PersonaeLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return (
+    <>
+      {/* Handwriting face for the letter view. The woff2 (incl. Korean glyphs)
+          is fetched lazily via unicode-range only when a letter is opened. */}
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap"
+      />
+      {children}
+    </>
+  );
 }

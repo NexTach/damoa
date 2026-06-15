@@ -17,7 +17,11 @@ interface MessageRepository : JpaRepository<Message, Long> {
 
     fun countByRoomId(roomId: Long): Long
 
-    fun findByAttachmentKeyIsNotNullAndAttachmentExpiredFalseAndCreatedAtBefore(cutoff: Instant): List<Message>
+    // Highlighted (pinned) messages are never purged.
+    fun findByAttachmentKeyIsNotNullAndAttachmentExpiredFalseAndPinnedFalseAndCreatedAtBefore(cutoff: Instant): List<Message>
+
+    // Highlighted attachments of a room, newest first.
+    fun findByRoomIdAndPinnedTrueOrderBySentAtDescIdDesc(roomId: Long): List<Message>
 
     // Newest page (no cursor). Caller reverses to ascending for display.
     fun findByRoomIdOrderBySentAtDescIdDesc(

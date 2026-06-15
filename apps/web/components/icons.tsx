@@ -151,6 +151,33 @@ export function IconSearch({ size = 16, className }: IconProps) {
   );
 }
 
+// Highlight marker. Pass `filled` to render a solid star (pinned state).
+export function IconStar({
+  size = 16,
+  className,
+  filled,
+}: IconProps & { filled?: boolean }) {
+  return (
+    <svg
+      {...base(size)}
+      fill={filled ? "currentColor" : "none"}
+      className={className}
+      aria-hidden
+    >
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+    </svg>
+  );
+}
+
+export function IconMail({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m2 7 10 6 10-6" />
+    </svg>
+  );
+}
+
 export function IconChart({ size = 16, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden>

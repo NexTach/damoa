@@ -19,6 +19,7 @@ import {
   IconCopy,
   IconDownload,
   IconFile,
+  IconMail,
   IconPaperclip,
   IconPencil,
   IconPlus,
@@ -26,6 +27,7 @@ import {
   IconSearch,
   IconSend,
   IconSettings,
+  IconStar,
   IconTrash,
   IconX,
 } from "@/components/icons";
@@ -35,11 +37,12 @@ import { ThemeToggle } from "@/components/theme-toggle";
 const TalkStats = dynamic(() => import("@/components/talk-stats"), {
   ssr: false,
 });
+
 import {
+  CLIENT_ID,
   clearToken,
   createMessage,
   createPersona,
-  CLIENT_ID,
   createRoom,
   decryptMessage,
   deleteMessage,
@@ -47,21 +50,23 @@ import {
   deleteRoom,
   encryptText,
   eventsUrl,
+  FileTooLargeError,
   fetchMe,
   fetchOg,
-  FileTooLargeError,
   fileUrl,
   getToken,
   hydrateMessages,
   isAuthError,
   listMessages,
   listPersonas,
+  listPinned,
   listRooms,
   loginUrl,
   type Me,
   type Message,
   type OgPreview,
   type Persona,
+  pinMessage,
   type Room,
   setToken,
   updateMessage,
@@ -112,6 +117,10 @@ const toLocalInput = (iso: string) => {
 
 const URL_RE = /(https?:\/\/[^\s]+)/gi;
 const firstUrl = (s: string) => s.match(/(https?:\/\/[^\s]+)/i)?.[0] ?? null;
+
+// Long messages get a "letter view": clamped in chat, openable full-screen.
+const isLetter = (s: string) =>
+  s.length >= 220 || (s.match(/\n/g)?.length ?? 0) >= 8;
 
 // One-line preview of a message (for reply quotes).
 const msgPreview = (m: Message) =>
@@ -357,6 +366,8 @@ function PersonaeInner() {
   const [personaModal, setPersonaModal] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [highlightsOpen, setHighlightsOpen] = useState(false);
+  const [letter, setLetter] = useState<Message | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -421,6 +432,7 @@ function PersonaeInner() {
     setSettingsOpen(false);
     setSearchOpen(false);
     setStatsOpen(false);
+    setHighlightsOpen(false);
     const page = await listMessages(r.id, { limit: 40 });
     stickBottom.current = true;
     setJumped(false);
@@ -434,6 +446,7 @@ function PersonaeInner() {
   const jumpTo = async (messageId: number) => {
     if (!room) return;
     setSearchOpen(false);
+    setHighlightsOpen(false);
     const page = await listMessages(room.id, { limit: 50, at: messageId });
     scrollToId.current = messageId;
     setJumped(true);
@@ -728,6 +741,14 @@ function PersonaeInner() {
       setSending(false);
     }
   };
+  // Highlight (pin) a message's attachment so it's never auto-purged.
+  const togglePin = async (m: Message) => {
+    if (!room) return;
+    const updated = await pinMessage(room.id, m.id, !m.pinned);
+    const msg = await decryptMessage(updated);
+    setMessages((cur) => cur.map((x) => (x.id === msg.id ? msg : x)));
+  };
+
   const removeMessage = async (id: number) => {
     if (!room) return;
     const ok = await dialog.confirm("이 메시지를 삭제할까요?", {
@@ -1095,6 +1116,15 @@ function PersonaeInner() {
               >
                 <IconChart size={18} />
               </button>
+              <button
+                type="button"
+                onClick={() => setHighlightsOpen(true)}
+                aria-label="하이라이트"
+                title="하이라이트"
+                className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+              >
+                <IconStar size={18} />
+              </button>
               {!capture && (
                 <>
                   <button
@@ -1292,19 +1322,48 @@ function PersonaeInner() {
                                     }
                               }
                             >
-                              {renderContent(m.content)}
+                              {isLetter(m.content) ? (
+                                <>
+                                  <div className="line-clamp-6">
+                                    {renderContent(m.content)}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setLetter(m)}
+                                    className="mt-2 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] underline underline-offset-2 opacity-70 hover:opacity-100"
+                                  >
+                                    <IconMail size={12} /> 편지로 읽기
+                                  </button>
+                                </>
+                              ) : (
+                                renderContent(m.content)
+                              )}
                             </div>
                           )}
                           {url && <LinkPreview url={url} />}
                           {showTime ? (
-                            <span className="mt-1 font-mono text-[9px] text-[var(--muted)]">
+                            <span className="mt-1 flex items-center gap-1 font-mono text-[9px] text-[var(--muted)]">
+                              {m.pinned && (
+                                <IconStar
+                                  size={10}
+                                  filled
+                                  className="text-[var(--accent)]"
+                                />
+                              )}
                               {timeOf(m.sentAt)}
                             </span>
                           ) : (
                             !capture && (
                               // Hidden (not just transparent) so grouped messages
                               // stay tight; revealed on hover.
-                              <span className="mt-1 hidden font-mono text-[9px] text-[var(--muted)] group-hover:block">
+                              <span className="mt-1 hidden items-center gap-1 font-mono text-[9px] text-[var(--muted)] group-hover:flex">
+                                {m.pinned && (
+                                  <IconStar
+                                    size={10}
+                                    filled
+                                    className="text-[var(--accent)]"
+                                  />
+                                )}
                                 {timeOf(m.sentAt)}
                               </span>
                             )
@@ -1513,12 +1572,37 @@ function PersonaeInner() {
       {statsOpen && room && (
         <TalkStats roomId={room.id} onClose={() => setStatsOpen(false)} />
       )}
+      {highlightsOpen && room && (
+        <HighlightsPanel
+          roomId={room.id}
+          personas={personas}
+          onJump={jumpTo}
+          onUnpin={togglePin}
+          onDelete={removeMessage}
+          onClose={() => setHighlightsOpen(false)}
+        />
+      )}
+      {letter && (
+        <LetterView
+          message={letter}
+          persona={personaBy(letter.personaId)}
+          onClose={() => setLetter(null)}
+        />
+      )}
       {actionMsg && (
         <ActionSheet
           pos={actionPos}
           canCopy={!!actionMsg.content.trim()}
           // In capture mode you can only edit/delete your own (sender's) messages.
           canModify={!capture || actionMsg.personaId === sender}
+          // Only attachments can be highlighted (kept from auto-expiry).
+          canPin={!!(actionMsg.attachmentUrl || actionMsg.attachmentExpired)}
+          pinned={actionMsg.pinned}
+          onPin={() => {
+            const msg = actionMsg;
+            setActionMsg(null);
+            togglePin(msg);
+          }}
           onReply={() => {
             startReply(actionMsg);
             setActionMsg(null);
@@ -1683,6 +1767,9 @@ function ActionSheet({
   pos,
   canCopy,
   canModify,
+  canPin,
+  pinned,
+  onPin,
   onReply,
   onCopy,
   onEdit,
@@ -1692,6 +1779,9 @@ function ActionSheet({
   pos: { x: number; y: number } | null;
   canCopy: boolean;
   canModify: boolean;
+  canPin: boolean;
+  pinned: boolean;
+  onPin: () => void;
   onReply: () => void;
   onCopy: () => void;
   onEdit: () => void;
@@ -1701,6 +1791,13 @@ function ActionSheet({
   return (
     <ActionMenu pos={pos} onClose={onClose}>
       <MenuItem icon={<IconReply size={16} />} label="답장" onClick={onReply} />
+      {canPin && (
+        <MenuItem
+          icon={<IconStar size={16} filled={pinned} />}
+          label={pinned ? "하이라이트 해제" : "하이라이트"}
+          onClick={onPin}
+        />
+      )}
       {canCopy && (
         <MenuItem
           icon={<IconCopy size={16} />}
@@ -2307,6 +2404,212 @@ function PersonaQuickEdit({
           >
             삭제
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Full-screen "letter" reader for long messages — handwriting font on paper.
+function LetterView({
+  message,
+  persona,
+  onClose,
+}: {
+  message: Message;
+  persona?: Persona;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/70 sm:items-center sm:p-4"
+      onClick={onClose}
+      // biome-ignore lint/a11y/noStaticElementInteractions: backdrop close
+      role="presentation"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
+        role="presentation"
+        className="pb-safe sheet-up flex max-h-[92vh] w-full max-w-lg flex-col rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] shadow-2xl sm:max-h-[88vh] sm:rounded-2xl"
+      >
+        <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <Avatar persona={persona} size={28} />
+            <div className="min-w-0">
+              <div className="truncate text-sm">
+                {persona?.name ?? "메시지"}
+              </div>
+              <div className="font-mono text-[9px] text-[var(--muted)]">
+                {timeOf(message.sentAt)}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="text-[var(--muted)] hover:text-[var(--fg)]"
+          >
+            <IconX size={18} />
+          </button>
+        </div>
+        <div className="letter-paper flex-1 overflow-y-auto px-6 py-6 sm:px-8 sm:py-7">
+          <p className="font-hand whitespace-pre-wrap break-words text-[27px] leading-[44px] text-[var(--fg)]">
+            {message.content}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Per-room highlights: pinned attachments, kept from auto-expiry.
+function HighlightsPanel({
+  roomId,
+  personas,
+  onJump,
+  onUnpin,
+  onDelete,
+  onClose,
+}: {
+  roomId: number;
+  personas: Persona[];
+  onJump: (messageId: number) => void;
+  onUnpin: (m: Message) => Promise<void>;
+  onDelete: (id: number) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [items, setItems] = useState<Message[] | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const personaBy = (id: number) => personas.find((p) => p.id === id);
+
+  const load = useCallback(async () => {
+    try {
+      setItems(await hydrateMessages(await listPinned(roomId)));
+    } catch {
+      setItems([]);
+    }
+  }, [roomId]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const unpin = async (m: Message) => {
+    setBusyId(m.id);
+    try {
+      await onUnpin(m);
+      setItems((cur) => cur?.filter((x) => x.id !== m.id) ?? null);
+    } finally {
+      setBusyId(null);
+    }
+  };
+  const del = async (m: Message) => {
+    await onDelete(m.id);
+    await load();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[110] flex items-end justify-center bg-black/65 sm:items-center sm:p-4"
+      onClick={onClose}
+      // biome-ignore lint/a11y/noStaticElementInteractions: backdrop close
+      role="presentation"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
+        role="presentation"
+        className="pb-safe sheet-up flex max-h-[88vh] w-full max-w-md flex-col rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] shadow-2xl sm:max-h-[85vh] sm:rounded-2xl"
+      >
+        <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-4">
+          <span className="flex items-center gap-2 font-display text-lg">
+            <IconStar size={18} filled className="text-[var(--accent)]" />
+            하이라이트
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="text-[var(--muted)] hover:text-[var(--fg)]"
+          >
+            <IconX size={18} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3">
+          {items === null && (
+            <p className="px-2 py-8 text-center font-mono text-[12px] text-[var(--muted)]">
+              불러오는 중…
+            </p>
+          )}
+          {items?.length === 0 && (
+            <p className="px-2 py-10 text-center font-mono text-[12px] leading-relaxed text-[var(--muted)]">
+              하이라이트한 파일이 없어요.
+              <br />
+              파일을 길게 누르거나 우클릭해 '하이라이트'하면
+              <br />
+              여기에 모이고 만료되지 않아요.
+            </p>
+          )}
+          <div className="space-y-2">
+            {items?.map((m) => {
+              const p = personaBy(m.personaId);
+              return (
+                <div
+                  key={m.id}
+                  className="rounded-xl border border-[var(--line)] p-3"
+                >
+                  <div className="mb-2 flex items-center gap-2">
+                    <Avatar persona={p} size={22} />
+                    <span className="truncate text-[13px]">{p?.name}</span>
+                    <span className="ml-auto shrink-0 font-mono text-[9px] text-[var(--muted)]">
+                      {timeOf(m.sentAt)}
+                    </span>
+                  </div>
+                  {m.attachmentExpired || !m.attachmentUrl ? (
+                    <div className="mb-2 flex items-center gap-2 rounded-xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
+                      <IconTrash size={13} /> 파일을 찾을 수 없어요
+                    </div>
+                  ) : (
+                    <AttachmentView
+                      url={m.attachmentUrl}
+                      type={m.attachmentType}
+                      name={m.attachmentName}
+                    />
+                  )}
+                  {m.content.trim() && (
+                    <p className="mb-2 line-clamp-2 text-[12px] text-[var(--muted)]">
+                      {m.content}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-end gap-1 font-mono text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => onJump(m.id)}
+                      className="rounded-lg px-2.5 py-1.5 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+                    >
+                      이동
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => unpin(m)}
+                      disabled={busyId === m.id}
+                      className="rounded-lg px-2.5 py-1.5 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--fg)] disabled:opacity-40"
+                    >
+                      {busyId === m.id ? "해제 중…" : "해제"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => del(m)}
+                      className="rounded-lg px-2.5 py-1.5 text-[#ff5e3a] hover:bg-[var(--hover)]"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

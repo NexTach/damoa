@@ -150,4 +150,26 @@ class MessageServiceImpl(
         val message = repository.findByIdAndRoomId(messageId, roomId) ?: notFound("message not found")
         repository.delete(message)
     }
+
+    @Transactional(readOnly = true)
+    override fun listPinned(
+        ownerId: Long,
+        roomId: Long,
+    ): List<MessageResponse> {
+        roomService.requireOwned(ownerId, roomId)
+        return repository.findByRoomIdAndPinnedTrueOrderBySentAtDescIdDesc(roomId).map { it.toResponse(publicBase) }
+    }
+
+    @Transactional
+    override fun setPin(
+        ownerId: Long,
+        roomId: Long,
+        messageId: Long,
+        pinned: Boolean,
+    ): MessageResponse {
+        roomService.requireOwned(ownerId, roomId)
+        val message = repository.findByIdAndRoomId(messageId, roomId) ?: notFound("message not found")
+        message.pinned = pinned
+        return repository.save(message).toResponse(publicBase)
+    }
 }

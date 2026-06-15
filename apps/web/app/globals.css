@@ -65,6 +65,24 @@ body {
   letter-spacing: -0.03em;
 }
 
+/* 편지뷰 손글씨체 (긴 메시지 전체화면). 폰트는 personae 레이아웃에서
+   Google Fonts 스타일시트로 로드 (한글 글리프 포함). */
+.font-hand {
+  font-family: "Nanum Pen Script", "Gaegu", cursive;
+}
+
+/* 편지지 — 은은한 가로 괘선 + 따뜻한 종이 톤 */
+.letter-paper {
+  background-color: var(--bg-2);
+  background-image: repeating-linear-gradient(
+    transparent,
+    transparent 43px,
+    var(--line) 43px,
+    var(--line) 44px
+  );
+  background-attachment: local;
+}
+
 /* 필름 그레인 + 비네트 (전 화면 고정 오버레이) */
 .grain {
   position: fixed;

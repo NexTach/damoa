@@ -38,7 +38,7 @@ class AttachmentServiceImpl(
         val cutoff = Instant.now().minus(ttlDays, ChronoUnit.DAYS)
         val stale =
             messageRepository
-                .findByAttachmentKeyIsNotNullAndAttachmentExpiredFalseAndCreatedAtBefore(cutoff)
+                .findByAttachmentKeyIsNotNullAndAttachmentExpiredFalseAndPinnedFalseAndCreatedAtBefore(cutoff)
         stale.forEach { message ->
             message.attachmentKey?.let { storage.delete(it) }
             message.attachmentKey = null
