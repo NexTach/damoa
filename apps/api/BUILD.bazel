@@ -48,10 +48,13 @@ spring_boot_jar(
     main_class = "io.github.snowykte0426.damoa.DamoaApplicationKt",
 )
 
+# JUnit 5 (Jupiter): kt_jvm_test defaults to the JUnit4 BazelTestRunner, which
+# can't run Jupiter tests — point main_class at our platform-launcher entry
+# point instead (see src/test/kotlin/.../JUnit5Runner.kt).
 kt_jvm_test(
     name = "test",
     srcs = glob(["src/test/kotlin/**/*.kt"]),
-    test_class = "io.github.snowykte0426.damoa.DamoaApplicationTests",
+    main_class = "io.github.snowykte0426.damoa.JUnit5Runner",
     runtime_deps = _RUNTIME_DEPS,
     deps = _DEPS + [
         ":lib",
