@@ -1779,7 +1779,7 @@ function PersonaeInner() {
                 // would dismiss the keyboard) and re-enable instantly on finish.
                 disabled={sender == null}
                 readOnly={sending}
-                className={`max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50 ${sending ? "opacity-60" : ""}`}
+                className={`no-scrollbar max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50 ${sending ? "opacity-60" : ""}`}
               />
               <button
                 type="button"

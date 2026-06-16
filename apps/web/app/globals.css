@@ -91,6 +91,15 @@ body {
   background-attachment: local;
 }
 
+/* 스크롤은 되지만 스크롤바는 숨김 (입력창 등) */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* 필름 그레인 + 비네트 (전 화면 고정 오버레이) */
 .grain {
   position: fixed;
