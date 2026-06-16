@@ -425,6 +425,15 @@ function PersonaeInner() {
     };
   }, []);
 
+  // Auto-grow the composer with its content (up to max-h-32 ≈ 128px), and
+  // shrink back to one line after the draft is cleared (e.g. on send).
+  useLayoutEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }, [draft]);
+
   // Lock document scroll in the chat view so focusing the input / opening the
   // keyboard can't scroll the whole page (the message list is the only scroller).
   useEffect(() => {
@@ -1766,9 +1775,11 @@ function PersonaeInner() {
                   sender != null ? "메시지 보내기" : "보낸 사람을 먼저 고르세요"
                 }
                 // Stay enabled while sending so focus (and the mobile keyboard)
-                // is never lost — enables consecutive sends.
+                // is never lost. Block input via readOnly (not disabled, which
+                // would dismiss the keyboard) and re-enable instantly on finish.
                 disabled={sender == null}
-                className="max-h-32 min-w-0 flex-1 resize-none rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50"
+                readOnly={sending}
+                className={`max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50 ${sending ? "opacity-60" : ""}`}
               />
               <button
                 type="button"
