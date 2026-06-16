@@ -38,7 +38,7 @@ class MessageServiceImpl(
         val desc =
             when {
                 at != null -> {
-                    val target = repository.findByIdAndRoomId(at, roomId) ?: notFound("message not found")
+                    val target = find(roomId, at)
                     repository.findOlderOrEqual(roomId, target.sentAt, target.id, page)
                 }
                 before != null -> {
@@ -133,7 +133,7 @@ class MessageServiceImpl(
         req: MessageRequest,
     ): MessageResponse {
         roomService.requireOwned(ownerId, roomId)
-        val message = repository.findByIdAndRoomId(messageId, roomId) ?: notFound("message not found")
+        val message = find(roomId, messageId)
         message.content = req.content
         message.personaId = req.personaId
         req.sentAt?.let { message.sentAt = it }
@@ -147,7 +147,7 @@ class MessageServiceImpl(
         messageId: Long,
     ) {
         roomService.requireOwned(ownerId, roomId)
-        val message = repository.findByIdAndRoomId(messageId, roomId) ?: notFound("message not found")
+        val message = find(roomId, messageId)
         repository.delete(message)
     }
 
@@ -168,8 +168,13 @@ class MessageServiceImpl(
         pinned: Boolean,
     ): MessageResponse {
         roomService.requireOwned(ownerId, roomId)
-        val message = repository.findByIdAndRoomId(messageId, roomId) ?: notFound("message not found")
+        val message = find(roomId, messageId)
         message.pinned = pinned
         return repository.save(message).toResponse(publicBase)
     }
+
+    private fun find(
+        roomId: Long,
+        messageId: Long,
+    ): Message = repository.findByIdAndRoomId(messageId, roomId) ?: notFound("message not found")
 }

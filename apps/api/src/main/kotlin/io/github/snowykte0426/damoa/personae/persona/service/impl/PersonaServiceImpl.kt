@@ -39,7 +39,7 @@ class PersonaServiceImpl(
         id: Long,
         req: PersonaRequest,
     ): PersonaResponse {
-        val persona = repository.findByIdAndOwnerId(id, ownerId) ?: notFound("persona not found")
+        val persona = find(ownerId, id)
         persona.name = req.name.ifBlank { persona.name }
         req.color?.let { persona.color = it }
         persona.avatarUrl = req.avatarUrl
@@ -52,7 +52,12 @@ class PersonaServiceImpl(
         ownerId: Long,
         id: Long,
     ) {
-        val persona = repository.findByIdAndOwnerId(id, ownerId) ?: notFound("persona not found")
+        val persona = find(ownerId, id)
         repository.delete(persona)
     }
+
+    private fun find(
+        ownerId: Long,
+        id: Long,
+    ): Persona = repository.findByIdAndOwnerId(id, ownerId) ?: notFound("persona not found")
 }
