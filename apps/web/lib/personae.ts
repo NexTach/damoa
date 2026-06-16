@@ -49,6 +49,27 @@ export type Message = {
   sentAt: string;
 };
 
+/** Classifies a message's attachment (by mime type, or expiry) for UI labels. */
+export type AttachmentKind =
+  | "expired"
+  | "image"
+  | "video"
+  | "audio"
+  | "file"
+  | "none";
+export const attachmentKind = (m: Message): AttachmentKind =>
+  m.attachmentExpired
+    ? "expired"
+    : m.attachmentType?.startsWith("image/")
+      ? "image"
+      : m.attachmentType?.startsWith("video/")
+        ? "video"
+        : m.attachmentType?.startsWith("audio/")
+          ? "audio"
+          : m.attachmentUrl
+            ? "file"
+            : "none";
+
 class AuthError extends Error {}
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {

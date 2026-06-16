@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import {
+  type AttachmentKind,
+  attachmentKind,
   hydrateMessages,
   isAuthError,
   type Message,
@@ -23,6 +25,16 @@ const timeOf = (iso: string) =>
     hour: "2-digit",
     minute: "2-digit",
   });
+
+// Search snippets label any non-image/video attachment (incl. audio) as "파일".
+const SNIPPET_LABEL: Record<AttachmentKind, string> = {
+  expired: "만료된 파일",
+  image: "사진",
+  video: "동영상",
+  audio: "파일",
+  file: "파일",
+  none: "",
+};
 
 function MiniAvatar({ p }: { p?: Persona }) {
   if (p?.avatarUrl)
@@ -136,16 +148,7 @@ export default function TalkSearch({
   };
 
   const snippet = (m: Message) =>
-    m.content?.trim() ||
-    (m.attachmentExpired
-      ? "만료된 파일"
-      : m.attachmentType?.startsWith("image/")
-        ? "사진"
-        : m.attachmentType?.startsWith("video/")
-          ? "동영상"
-          : m.attachmentUrl
-            ? "파일"
-            : "");
+    m.content?.trim() || SNIPPET_LABEL[attachmentKind(m)];
 
   return (
     <div

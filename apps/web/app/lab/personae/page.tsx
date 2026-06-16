@@ -39,6 +39,8 @@ const TalkStats = dynamic(() => import("@/components/talk-stats"), {
 });
 
 import {
+  type AttachmentKind,
+  attachmentKind,
   CLIENT_ID,
   clearToken,
   createMessage,
@@ -122,20 +124,18 @@ const firstUrl = (s: string) => s.match(/(https?:\/\/[^\s]+)/i)?.[0] ?? null;
 const isLetter = (s: string) =>
   s.length >= 220 || (s.match(/\n/g)?.length ?? 0) >= 8;
 
+const ATTACHMENT_LABEL: Record<AttachmentKind, string> = {
+  expired: "만료된 파일",
+  image: "사진",
+  video: "동영상",
+  audio: "오디오",
+  file: "파일",
+  none: "메시지",
+};
+
 // One-line preview of a message (for reply quotes).
 const msgPreview = (m: Message) =>
-  m.content.trim() ||
-  (m.attachmentExpired
-    ? "만료된 파일"
-    : m.attachmentType?.startsWith("image/")
-      ? "사진"
-      : m.attachmentType?.startsWith("video/")
-        ? "동영상"
-        : m.attachmentType?.startsWith("audio/")
-          ? "오디오"
-          : m.attachmentUrl
-            ? "파일"
-            : "메시지");
+  m.content.trim() || ATTACHMENT_LABEL[attachmentKind(m)];
 
 // Renders message text with clickable links.
 function renderContent(text: string) {
@@ -215,6 +215,15 @@ function LinkPreview({ url }: { url: string }) {
   );
 }
 
+// Placeholder for an attachment that expired or failed to load.
+function ExpiredFile() {
+  return (
+    <div className="mb-1 flex items-center gap-2 rounded-2xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
+      <IconTrash size={13} /> 만료된 파일입니다
+    </div>
+  );
+}
+
 // Renders a sent attachment by mime type: image / video / audio / generic file.
 function AttachmentView({
   url,
@@ -227,13 +236,7 @@ function AttachmentView({
 }) {
   // Falls back to the expired placeholder if the file can't be loaded (410 etc.).
   const [broken, setBroken] = useState(false);
-  if (broken) {
-    return (
-      <div className="mb-1 flex items-center gap-2 rounded-2xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
-        <IconTrash size={13} /> 만료된 파일입니다
-      </div>
-    );
-  }
+  if (broken) return <ExpiredFile />;
   if (type?.startsWith("image/")) {
     return (
       <img
@@ -813,22 +816,16 @@ function PersonaeInner() {
         if (!page.hasMore || !page.nextCursor) break;
         before = page.nextCursor;
       }
-      const assistant = personaBy(assistantId);
       const parts = room.participantPersonaIds
         .map(personaBy)
         .filter((p): p is Persona => !!p);
-      const marker = (m: Message) =>
-        m.attachmentExpired
-          ? "[만료된 파일]"
-          : m.attachmentType?.startsWith("image/")
-            ? "[사진]"
-            : m.attachmentType?.startsWith("video/")
-              ? "[동영상]"
-              : m.attachmentType?.startsWith("audio/")
-                ? "[오디오]"
-                : m.attachmentUrl
-                  ? `[파일${m.attachmentName ? `: ${m.attachmentName}` : ""}]`
-                  : "";
+      const marker = (m: Message) => {
+        const kind = attachmentKind(m);
+        if (kind === "none") return "";
+        if (kind === "file")
+          return `[파일${m.attachmentName ? `: ${m.attachmentName}` : ""}]`;
+        return `[${ATTACHMENT_LABEL[kind]}]`;
+      };
       // Personas often share a name (e.g. the account default), so disambiguate
       // duplicates with a suffix and use that consistently as the display name.
       const total = new Map<string, number>();
@@ -877,8 +874,10 @@ function PersonaeInner() {
         messages.push(msg);
       }
       const safe = (s: string) =>
-        s.replace(/[^\w가-힣.-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) ||
-        "chat";
+        s
+          .replace(/[^\w가-힣.-]+/g, "_")
+          .replace(/^_+|_+$/g, "")
+          .slice(0, 40) || "chat";
       const filename = `personae-${safe(room.title)}-${safe(name)}.json`;
       const blob = new Blob([JSON.stringify({ messages }, null, 2)], {
         type: "application/json",
@@ -1496,11 +1495,7 @@ function PersonaeInner() {
                           </span>
                         </button>
                       )}
-                      {m.attachmentExpired && (
-                        <div className="mb-1 flex items-center gap-2 rounded-2xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
-                          <IconTrash size={13} /> 만료된 파일입니다
-                        </div>
-                      )}
+                      {m.attachmentExpired && <ExpiredFile />}
                       {m.attachmentUrl && (
                         <AttachmentView
                           url={m.attachmentUrl}
@@ -2118,21 +2113,21 @@ function RoomActionSheet({
   );
 }
 
-function PersonaManager({
-  personas,
-  onAdd,
-  onDelete,
-  onAvatar,
-  onManage,
-}: {
-  personas: Persona[];
-  onAdd: (name: string) => void;
-  onDelete: (id: number) => void;
-  onAvatar: (p: Persona, file: File) => Promise<void>;
-  onManage: () => void;
-}) {
+// Shared "delete this persona?" confirmation.
+const confirmDeletePersona = (
+  dialog: ReturnType<typeof useDialog>,
+  name: string,
+) =>
+  dialog.confirm(`'${name}' 페르소나를 삭제할까요?`, {
+    title: "페르소나 삭제",
+    confirmText: "삭제",
+    danger: true,
+  });
+
+// Shared avatar-upload flow used by the persona editors: pick a file for a
+// persona, upload it, surface errors, and track the in-flight persona id.
+function useAvatarPicker(onAvatar: (p: Persona, file: File) => Promise<void>) {
   const dialog = useDialog();
-  const [name, setName] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
   const avatarInput = useRef<HTMLInputElement>(null);
   const targetRef = useRef<Persona | null>(null);
@@ -2154,6 +2149,26 @@ function PersonaManager({
       if (avatarInput.current) avatarInput.current.value = "";
     }
   };
+  return { busyId, avatarInput, pickAvatar, onAvatarChange };
+}
+
+function PersonaManager({
+  personas,
+  onAdd,
+  onDelete,
+  onAvatar,
+  onManage,
+}: {
+  personas: Persona[];
+  onAdd: (name: string) => void;
+  onDelete: (id: number) => void;
+  onAvatar: (p: Persona, file: File) => Promise<void>;
+  onManage: () => void;
+}) {
+  const dialog = useDialog();
+  const [name, setName] = useState("");
+  const { busyId, avatarInput, pickAvatar, onAvatarChange } =
+    useAvatarPicker(onAvatar);
 
   return (
     <div className="border-b border-[var(--line)] px-4 pb-3 pt-1">
@@ -2199,14 +2214,7 @@ function PersonaManager({
             <button
               type="button"
               onClick={async () => {
-                if (
-                  await dialog.confirm(`'${p.name}' 페르소나를 삭제할까요?`, {
-                    title: "페르소나 삭제",
-                    confirmText: "삭제",
-                    danger: true,
-                  })
-                )
-                  onDelete(p.id);
+                if (await confirmDeletePersona(dialog, p.name)) onDelete(p.id);
               }}
               aria-label="삭제"
               className="hidden text-[var(--muted)] group-hover:block hover:text-[#ff5e3a]"
@@ -2420,27 +2428,8 @@ function PersonaModal({
 }) {
   const dialog = useDialog();
   const [name, setName] = useState("");
-  const [busyId, setBusyId] = useState<number | null>(null);
-  const avatarInput = useRef<HTMLInputElement>(null);
-  const targetRef = useRef<Persona | null>(null);
-
-  const pickAvatar = (p: Persona) => {
-    targetRef.current = p;
-    avatarInput.current?.click();
-  };
-  const onAvatarChange = async (file: File | null) => {
-    const p = targetRef.current;
-    if (!file || !p) return;
-    setBusyId(p.id);
-    try {
-      await onAvatar(p, file);
-    } catch {
-      dialog.alert("프로필 사진 변경에 실패했어요.");
-    } finally {
-      setBusyId(null);
-      if (avatarInput.current) avatarInput.current.value = "";
-    }
-  };
+  const { busyId, avatarInput, pickAvatar, onAvatarChange } =
+    useAvatarPicker(onAvatar);
 
   return (
     <div
@@ -2521,16 +2510,7 @@ function PersonaModal({
                   <button
                     type="button"
                     onClick={async () => {
-                      if (
-                        await dialog.confirm(
-                          `'${p.name}' 페르소나를 삭제할까요?`,
-                          {
-                            title: "페르소나 삭제",
-                            confirmText: "삭제",
-                            danger: true,
-                          },
-                        )
-                      )
+                      if (await confirmDeletePersona(dialog, p.name))
                         onDelete(p.id);
                     }}
                     aria-label="삭제"
@@ -2689,16 +2669,7 @@ function PersonaQuickEdit({
           <button
             type="button"
             onClick={async () => {
-              if (
-                await dialog.confirm(
-                  `'${persona.name}' 페르소나를 삭제할까요?`,
-                  {
-                    title: "페르소나 삭제",
-                    confirmText: "삭제",
-                    danger: true,
-                  },
-                )
-              )
+              if (await confirmDeletePersona(dialog, persona.name))
                 onDelete(persona.id);
             }}
             className="font-mono text-[11px] text-[var(--muted)] hover:text-[#ff5e3a]"
