@@ -1748,7 +1748,11 @@ function PersonaeInner() {
               <textarea
                 ref={composerRef}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
+                // Ignore edits while sending (soft block) — without touching
+                // disabled/readOnly, which would dismiss the mobile keyboard.
+                onChange={(e) => {
+                  if (!sending) setDraft(e.target.value);
+                }}
                 onPaste={(e) => {
                   // Paste an image/file from the clipboard → attach it.
                   const file = Array.from(e.clipboardData.items)
@@ -1770,10 +1774,8 @@ function PersonaeInner() {
                   sender != null ? "메시지 보내기" : "보낸 사람을 먼저 고르세요"
                 }
                 // Stay enabled while sending so focus (and the mobile keyboard)
-                // is never lost. Block input via readOnly (not disabled, which
-                // would dismiss the keyboard) and re-enable instantly on finish.
+                // is never lost — input is soft-blocked in onChange instead.
                 disabled={sender == null}
-                readOnly={sending}
                 className={`no-scrollbar max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50 ${sending ? "opacity-60" : ""}`}
               />
               <button
