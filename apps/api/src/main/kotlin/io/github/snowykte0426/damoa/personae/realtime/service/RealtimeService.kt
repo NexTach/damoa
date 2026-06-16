@@ -1,12 +1,12 @@
 package io.github.snowykte0426.damoa.personae.realtime.service
 
 import io.github.snowykte0426.damoa.personae.realtime.dto.response.RealtimeEvent
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 // In-memory SSE fan-out keyed by user — broadcasts change events to a user's
 // connected devices (single container, so no external pub/sub needed).
@@ -33,7 +33,10 @@ class RealtimeService {
         return emitter
     }
 
-    fun publish(userId: Long, event: RealtimeEvent) {
+    fun publish(
+        userId: Long,
+        event: RealtimeEvent,
+    ) {
         val list = byUser[userId] ?: return
         for (emitter in list) {
             runCatching {

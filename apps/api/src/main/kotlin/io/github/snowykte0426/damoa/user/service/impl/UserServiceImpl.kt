@@ -4,11 +4,11 @@ import io.github.snowykte0426.damoa.common.notFound
 import io.github.snowykte0426.damoa.user.entity.User
 import io.github.snowykte0426.damoa.user.repository.UserRepository
 import io.github.snowykte0426.damoa.user.service.UserService
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.security.SecureRandom
 import java.time.Instant
 import java.util.Base64
-import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 
 @Service
 class UserServiceImpl(

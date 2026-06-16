@@ -1,10 +1,10 @@
 package io.github.snowykte0426.damoa.personae.attachment.service.impl
 
 import io.github.snowykte0426.damoa.config.AppProperties
-import io.github.snowykte0426.damoa.storage.StorageService
 import io.github.snowykte0426.damoa.personae.attachment.dto.response.UploadResponse
 import io.github.snowykte0426.damoa.personae.attachment.service.AttachmentService
 import io.github.snowykte0426.damoa.personae.message.repository.MessageRepository
+import io.github.snowykte0426.damoa.storage.StorageService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
