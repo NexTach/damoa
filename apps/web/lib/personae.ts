@@ -30,7 +30,6 @@ export type Persona = {
 export type Room = {
   id: number;
   title: string;
-  selfPersonaId: number | null;
   participantPersonaIds: number[];
   updatedAt: string;
 };

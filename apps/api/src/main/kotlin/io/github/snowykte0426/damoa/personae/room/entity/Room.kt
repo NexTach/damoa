@@ -18,8 +18,6 @@ open class Room(
     open var id: Long = 0,
     open var ownerId: Long = 0,
     open var title: String = "",
-    // The persona whose messages are aligned as "me" (right side).
-    open var selfPersonaId: Long? = null,
     @ElementCollection
     @CollectionTable(name = "room_personas", joinColumns = [JoinColumn(name = "room_id")])
     @Column(name = "persona_id")

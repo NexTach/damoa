@@ -33,7 +33,6 @@ class RoomServiceImpl(
             Room(
                 ownerId = ownerId,
                 title = req.title.ifBlank { "New chat" },
-                selfPersonaId = req.selfPersonaId,
                 participantPersonaIds = (req.participantPersonaIds ?: emptySet()).toMutableSet(),
             )
         return repository.save(room).toResponse()
@@ -48,7 +47,6 @@ class RoomServiceImpl(
         val room = find(ownerId, id)
         room.title = req.title.ifBlank { room.title }
         req.participantPersonaIds?.let { room.participantPersonaIds = it.toMutableSet() }
-        room.selfPersonaId = req.selfPersonaId
         room.updatedAt = Instant.now()
         return repository.save(room).toResponse()
     }
