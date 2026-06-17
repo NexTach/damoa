@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/preToolUse.sh"
+            "command": ".claude/hooks/preToolUse.sh"
           }
         ]
       }
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/postToolUse.sh"
+            "command": ".claude/hooks/postToolUse.sh"
           }
         ]
       }
