@@ -89,8 +89,9 @@ export default function TalkSearch({
   const matches = (m: Message) =>
     !needle || m.content.toLowerCase().includes(needle);
 
-  // Pull server pages (decrypting + content-filtering) until some matches
-  // surface or the room is exhausted.
+  // Scan the WHOLE room (within the sender/date filter), decrypting every page
+  // and matching the query client-side — content is E2EE so the server can't.
+  // Pages are large and we keep going to the end for complete, accurate results.
   const gather = async (start: string | null): Promise<Message[]> => {
     let cur = start;
     let safety = 0;
@@ -103,9 +104,9 @@ export default function TalkSearch({
       const hydrated = await hydrateMessages(r.messages);
       acc.push(...hydrated.filter(matches));
       cur = r.nextCursor;
-      setMore(r.hasMore);
       safety++;
-    } while (cur && acc.length === 0 && safety < 6);
+    } while (cur && safety < 80);
+    setMore(!!cur); // only true if we hit the safety cap on a huge room
     setCursor(cur);
     return acc;
   };

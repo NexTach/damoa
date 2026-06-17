@@ -23,7 +23,7 @@ class MessageServiceImpl(
     props: AppProperties,
 ) : MessageService {
     private val publicBase = props.s3.publicBase
-    private val searchPageSize = 30
+    private val searchPageSize = 100
 
     @Transactional(readOnly = true)
     override fun list(
