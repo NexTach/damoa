@@ -76,45 +76,27 @@ export default function TalkSearch({
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [more, setMore] = useState(false);
+  const [total, setTotal] = useState(0);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
 
-  // Server filters by sender/date only; content (q) is matched client-side
-  // after decryption (messages are end-to-end encrypted).
-  const serverFilter = (): MessageFilter => ({
+  // The server decrypts content in memory and matches the query, so we just
+  // page through accurate results and decrypt the returned page for display.
+  const filter = (cur?: string): MessageFilter => ({
+    q: q.trim() || undefined,
     personaId: personaId ?? undefined,
     after: after ? dayStart(after) : undefined,
     before: before ? dayEnd(before) : undefined,
+    cursor: cur,
   });
-  const needle = q.trim().toLowerCase();
-  const matches = (m: Message) =>
-    !needle || m.content.toLowerCase().includes(needle);
-
-  // Scan the WHOLE room (within the sender/date filter), decrypting every page
-  // and matching the query client-side — content is E2EE so the server can't.
-  // Pages are large and we keep going to the end for complete, accurate results.
-  const gather = async (start: string | null): Promise<Message[]> => {
-    let cur = start;
-    let safety = 0;
-    const acc: Message[] = [];
-    do {
-      const r = await searchMessages(roomId, {
-        ...serverFilter(),
-        cursor: cur ?? undefined,
-      });
-      const hydrated = await hydrateMessages(r.messages);
-      acc.push(...hydrated.filter(matches));
-      cur = r.nextCursor;
-      safety++;
-    } while (cur && safety < 80);
-    setMore(!!cur); // only true if we hit the safety cap on a huge room
-    setCursor(cur);
-    return acc;
-  };
 
   const run = async () => {
     setLoading(true);
     try {
-      setItems(await gather(null));
+      const r = await searchMessages(roomId, filter());
+      setItems(await hydrateMessages(r.messages));
+      setCursor(r.nextCursor);
+      setMore(r.hasMore);
+      setTotal(r.total);
     } catch (e) {
       if (!isAuthError(e)) {
         setItems([]);
@@ -129,8 +111,11 @@ export default function TalkSearch({
     if (!cursor || loading) return;
     setLoading(true);
     try {
-      const more = await gather(cursor);
-      setItems((cur) => [...(cur ?? []), ...more]);
+      const r = await searchMessages(roomId, filter(cursor));
+      const hydrated = await hydrateMessages(r.messages);
+      setItems((prev) => [...(prev ?? []), ...hydrated]);
+      setCursor(r.nextCursor);
+      setMore(r.hasMore);
     } catch {
       // ignore; keep what we have
     } finally {
@@ -253,7 +238,7 @@ export default function TalkSearch({
         <div className="flex-1 overflow-y-auto p-3" onScroll={onResultsScroll}>
           {items && (
             <div className="px-2 pb-2 font-mono text-[10px] tracking-[0.2em] text-[var(--muted)]">
-              {items.length.toLocaleString()}건{more ? " 이상" : ""}
+              {total.toLocaleString()}건
             </div>
           )}
           {items?.length === 0 && (

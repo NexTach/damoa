@@ -59,6 +59,7 @@ import {
   getToken,
   hydrateMessages,
   isAuthError,
+  listLetters,
   listMessages,
   listPersonas,
   listPinned,
@@ -2736,23 +2737,11 @@ function HighlightsPanel({
     load();
   }, [load]);
 
-  // Letters aren't a server concept — pull the whole history and filter the
-  // long messages client-side. Decryption is the slow part, so only decrypt
-  // candidates long enough to possibly be a letter (raw ciphertext/plaintext
-  // length), instead of every message in the room.
+  // The server decrypts + filters letters in memory; we just decrypt the
+  // returned set for display (newest first).
   const loadLetters = useCallback(async () => {
     try {
-      let raw: Message[] = [];
-      let before: string | undefined;
-      while (true) {
-        const page = await listMessages(roomId, { limit: 100, before });
-        raw = [...page.messages, ...raw];
-        if (!page.hasMore || !page.nextCursor) break;
-        before = page.nextCursor;
-      }
-      const candidates = raw.filter((m) => m.content.length >= 150);
-      const decrypted = await hydrateMessages(candidates);
-      setLetters(decrypted.filter((m) => isLetter(m.content)).reverse());
+      setLetters(await hydrateMessages(await listLetters(roomId)));
     } catch {
       setLetters([]);
     }

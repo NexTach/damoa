@@ -59,6 +59,11 @@ class MessageController(
         @PathVariable roomId: Long,
     ): List<MessageResponse> = service.listPinned(currentUserId(), roomId)
 
+    @GetMapping("/letters")
+    fun letters(
+        @PathVariable roomId: Long,
+    ): List<MessageResponse> = service.listLetters(currentUserId(), roomId)
+
     @PatchMapping("/{messageId}/pin")
     fun pin(
         @PathVariable roomId: Long,

@@ -10,7 +10,9 @@ import io.github.snowykte0426.damoa.personae.message.dto.response.toResponse
 import io.github.snowykte0426.damoa.personae.message.entity.Message
 import io.github.snowykte0426.damoa.personae.message.repository.MessageRepository
 import io.github.snowykte0426.damoa.personae.message.service.MessageService
+import io.github.snowykte0426.damoa.personae.message.support.MessageCrypto
 import io.github.snowykte0426.damoa.personae.room.service.RoomService
+import io.github.snowykte0426.damoa.user.service.UserService
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -20,6 +22,7 @@ import java.time.Instant
 class MessageServiceImpl(
     private val repository: MessageRepository,
     private val roomService: RoomService,
+    private val userService: UserService,
     props: AppProperties,
 ) : MessageService {
     private val publicBase = props.s3.publicBase
@@ -65,29 +68,26 @@ class MessageServiceImpl(
         cursor: String?,
     ): SearchResult {
         roomService.requireOwned(ownerId, roomId)
-        val query = q?.trim()?.ifBlank { null }
-        val cur = cursor?.let { decodeCursor(it) }
-        val rows =
-            repository.search(
-                roomId,
-                query,
-                personaId,
-                after,
-                before,
-                cur?.first,
-                cur?.second,
-                PageRequest.of(0, searchPageSize + 1),
-            )
-        val hasMore = rows.size > searchPageSize
-        val page = rows.take(searchPageSize)
-        val nextCursor =
-            if (hasMore && page.isNotEmpty()) {
-                page.last().let { encodeCursor(it.sentAt, it.id) }
+        val query = q?.trim()?.lowercase()?.ifBlank { null }
+        // Content is encrypted at rest; the server holds the key, so we decrypt
+        // candidates in memory and match the query here (accurate, whole-room).
+        val candidates = repository.searchCandidates(roomId, personaId, after, before)
+        val matched =
+            if (query == null) {
+                candidates
             } else {
-                null
+                val key = userService.get(ownerId)?.encKey
+                candidates.filter { MessageCrypto.decrypt(it.content, key).lowercase().contains(query) }
             }
-        val total = repository.searchCount(roomId, query, personaId, after, before)
-        return SearchResult(page.map { it.toResponse(publicBase) }, total, hasMore, nextCursor)
+        // Cursor is the last message id of the previous page (stable per query).
+        val startIdx =
+            cursor?.toLongOrNull()?.let { cid ->
+                matched.indexOfFirst { it.id == cid }.let { if (it >= 0) it + 1 else 0 }
+            } ?: 0
+        val page = matched.drop(startIdx).take(searchPageSize)
+        val hasMore = matched.size > startIdx + searchPageSize
+        val nextCursor = if (hasMore && page.isNotEmpty()) page.last().id.toString() else null
+        return SearchResult(page.map { it.toResponse(publicBase) }, matched.size.toLong(), hasMore, nextCursor)
     }
 
     private fun encodeCursor(
@@ -158,6 +158,19 @@ class MessageServiceImpl(
     ): List<MessageResponse> {
         roomService.requireOwned(ownerId, roomId)
         return repository.findByRoomIdAndPinnedTrueOrderBySentAtDescIdDesc(roomId).map { it.toResponse(publicBase) }
+    }
+
+    @Transactional(readOnly = true)
+    override fun listLetters(
+        ownerId: Long,
+        roomId: Long,
+    ): List<MessageResponse> {
+        roomService.requireOwned(ownerId, roomId)
+        val key = userService.get(ownerId)?.encKey
+        return repository
+            .findLetterCandidates(roomId)
+            .filter { MessageCrypto.isLetter(MessageCrypto.decrypt(it.content, key)) }
+            .map { it.toResponse(publicBase) }
     }
 
     @Transactional

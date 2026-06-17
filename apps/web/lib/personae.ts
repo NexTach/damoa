@@ -307,6 +307,10 @@ export const deleteMessage = (roomId: number, messageId: number) =>
 export const listPinned = (roomId: number) =>
   tm<Message[]>(`/rooms/${roomId}/messages/pinned`);
 
+/** Long "letter" messages of a room (server decrypts + filters), newest first. */
+export const listLetters = (roomId: number) =>
+  tm<Message[]>(`/rooms/${roomId}/messages/letters`);
+
 /** Toggles a message's highlight (pin) state. */
 export const pinMessage = (
   roomId: number,

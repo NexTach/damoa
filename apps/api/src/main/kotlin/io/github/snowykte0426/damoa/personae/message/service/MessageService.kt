@@ -54,6 +54,12 @@ interface MessageService {
         roomId: Long,
     ): List<MessageResponse>
 
+    /** Long "letter" messages of a room, newest first (decrypted server-side). */
+    fun listLetters(
+        ownerId: Long,
+        roomId: Long,
+    ): List<MessageResponse>
+
     /** Toggles a message's highlight (pin) state. */
     fun setPin(
         ownerId: Long,

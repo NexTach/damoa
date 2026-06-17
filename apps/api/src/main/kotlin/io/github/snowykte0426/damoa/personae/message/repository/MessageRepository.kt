@@ -23,6 +23,38 @@ interface MessageRepository : JpaRepository<Message, Long> {
     // Highlighted attachments of a room, newest first.
     fun findByRoomIdAndPinnedTrueOrderBySentAtDescIdDesc(roomId: Long): List<Message>
 
+    // Search candidates (sender/date filtered); content match is done in memory
+    // after decryption. Newest first.
+    @Query(
+        """
+        select m from Message m
+        where m.roomId = :roomId
+          and (:personaId is null or m.personaId = :personaId)
+          and (:after is null or m.sentAt >= :after)
+          and (:before is null or m.sentAt <= :before)
+        order by m.sentAt desc, m.id desc
+        """,
+    )
+    fun searchCandidates(
+        @Param("roomId") roomId: Long,
+        @Param("personaId") personaId: Long?,
+        @Param("after") after: Instant?,
+        @Param("before") before: Instant?,
+    ): List<Message>
+
+    // Letter candidates: only messages long enough to possibly be a letter
+    // (avoids decrypting every short message). Newest first.
+    @Query(
+        """
+        select m from Message m
+        where m.roomId = :roomId and length(m.content) >= 150
+        order by m.sentAt desc, m.id desc
+        """,
+    )
+    fun findLetterCandidates(
+        @Param("roomId") roomId: Long,
+    ): List<Message>
+
     // Newest page (no cursor). Caller reverses to ascending for display.
     fun findByRoomIdOrderBySentAtDescIdDesc(
         roomId: Long,
