@@ -1830,6 +1830,7 @@ function PersonaeInner() {
           onJump={jumpTo}
           onUnpin={togglePin}
           onDelete={removeMessage}
+          onOpenLetter={setLetter}
           onClose={() => setHighlightsOpen(false)}
         />
       )}
@@ -2738,13 +2739,15 @@ function LetterView({
   );
 }
 
-// Per-room highlights: pinned attachments, kept from auto-expiry.
+// Per-room archive: pinned attachments (highlights) + collected letters,
+// switchable via tabs.
 function HighlightsPanel({
   roomId,
   personas,
   onJump,
   onUnpin,
   onDelete,
+  onOpenLetter,
   onClose,
 }: {
   roomId: number;
@@ -2752,9 +2755,12 @@ function HighlightsPanel({
   onJump: (messageId: number) => void;
   onUnpin: (m: Message) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
+  onOpenLetter: (m: Message) => void;
   onClose: () => void;
 }) {
+  const [tab, setTab] = useState<"highlights" | "letters">("highlights");
   const [items, setItems] = useState<Message[] | null>(null);
+  const [letters, setLetters] = useState<Message[] | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const personaBy = (id: number) => personas.find((p) => p.id === id);
 
@@ -2768,6 +2774,27 @@ function HighlightsPanel({
   useEffect(() => {
     load();
   }, [load]);
+
+  // Letters aren't a server concept — pull the whole history and filter the
+  // long messages client-side. Loaded lazily when the tab is first opened.
+  const loadLetters = useCallback(async () => {
+    try {
+      let all: Message[] = [];
+      let before: string | undefined;
+      while (true) {
+        const page = await listMessages(roomId, { limit: 100, before });
+        all = [...(await hydrateMessages(page.messages)), ...all];
+        if (!page.hasMore || !page.nextCursor) break;
+        before = page.nextCursor;
+      }
+      setLetters(all.filter((m) => isLetter(m.content)).reverse());
+    } catch {
+      setLetters([]);
+    }
+  }, [roomId]);
+  useEffect(() => {
+    if (tab === "letters" && letters === null) loadLetters();
+  }, [tab, letters, loadLetters]);
 
   const unpin = async (m: Message) => {
     setBusyId(m.id);
@@ -2783,6 +2810,29 @@ function HighlightsPanel({
     await load();
   };
 
+  const TabBtn = ({
+    id,
+    icon,
+    label,
+  }: {
+    id: "highlights" | "letters";
+    icon: ReactNode;
+    label: string;
+  }) => (
+    <button
+      type="button"
+      onClick={() => setTab(id)}
+      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-[12px] transition-colors ${
+        tab === id
+          ? "bg-[var(--fg)] text-[var(--bg)]"
+          : "text-[var(--muted)] hover:text-[var(--fg)]"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+
   return (
     <div
       className="fixed inset-0 z-[110] flex items-end justify-center bg-black/65 sm:items-center sm:p-4"
@@ -2796,95 +2846,144 @@ function HighlightsPanel({
         role="presentation"
         className="pb-safe sheet-up flex max-h-[88vh] w-full max-w-md flex-col rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] shadow-2xl sm:max-h-[85vh] sm:rounded-2xl"
       >
-        <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-4">
-          <span className="flex items-center gap-2 font-display text-lg">
-            <IconStar size={18} filled className="text-[var(--accent)]" />
-            하이라이트
-          </span>
+        <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-3">
+          <div className="flex gap-1">
+            <TabBtn
+              id="highlights"
+              icon={<IconStar size={14} filled={tab === "highlights"} />}
+              label="하이라이트"
+            />
+            <TabBtn id="letters" icon={<IconMail size={14} />} label="편지" />
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="text-[var(--muted)] hover:text-[var(--fg)]"
+            className="shrink-0 px-1 text-[var(--muted)] hover:text-[var(--fg)]"
           >
             <IconX size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-3">
-          {items === null && (
-            <p className="px-2 py-8 text-center font-mono text-[12px] text-[var(--muted)]">
-              불러오는 중…
-            </p>
-          )}
-          {items?.length === 0 && (
-            <p className="px-2 py-10 text-center font-mono text-[12px] leading-relaxed text-[var(--muted)]">
-              하이라이트한 파일이 없어요.
-              <br />
-              파일을 길게 누르거나 우클릭해 '하이라이트'하면
-              <br />
-              여기에 모이고 만료되지 않아요.
-            </p>
-          )}
-          <div className="space-y-2">
-            {items?.map((m) => {
-              const p = personaBy(m.personaId);
-              return (
-                <div
-                  key={m.id}
-                  className="rounded-xl border border-[var(--line)] p-3"
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <Avatar persona={p} size={22} />
-                    <span className="truncate text-[13px]">{p?.name}</span>
-                    <span className="ml-auto shrink-0 font-mono text-[9px] text-[var(--muted)]">
-                      {timeOf(m.sentAt)}
-                    </span>
-                  </div>
-                  {m.attachmentExpired || !m.attachmentUrl ? (
-                    <div className="mb-2 flex items-center gap-2 rounded-xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
-                      <IconTrash size={13} /> 파일을 찾을 수 없어요
+
+        {tab === "highlights" ? (
+          <div className="flex-1 overflow-y-auto p-3">
+            {items === null && (
+              <p className="px-2 py-8 text-center font-mono text-[12px] text-[var(--muted)]">
+                불러오는 중…
+              </p>
+            )}
+            {items?.length === 0 && (
+              <p className="px-2 py-10 text-center font-mono text-[12px] leading-relaxed text-[var(--muted)]">
+                하이라이트한 파일이 없어요.
+                <br />
+                파일을 길게 누르거나 우클릭해 '하이라이트'하면
+                <br />
+                여기에 모이고 만료되지 않아요.
+              </p>
+            )}
+            <div className="space-y-2">
+              {items?.map((m) => {
+                const p = personaBy(m.personaId);
+                return (
+                  <div
+                    key={m.id}
+                    className="rounded-xl border border-[var(--line)] p-3"
+                  >
+                    <div className="mb-2 flex items-center gap-2">
+                      <Avatar persona={p} size={22} />
+                      <span className="truncate text-[13px]">{p?.name}</span>
+                      <span className="ml-auto shrink-0 font-mono text-[9px] text-[var(--muted)]">
+                        {timeOf(m.sentAt)}
+                      </span>
                     </div>
-                  ) : (
-                    <AttachmentView
-                      url={m.attachmentUrl}
-                      type={m.attachmentType}
-                      name={m.attachmentName}
-                    />
-                  )}
-                  {m.content.trim() && (
-                    <p className="mb-2 line-clamp-2 text-[12px] text-[var(--muted)]">
+                    {m.attachmentExpired || !m.attachmentUrl ? (
+                      <div className="mb-2 flex items-center gap-2 rounded-xl border border-dashed border-[var(--muted)] px-4 py-3 font-mono text-[12px] text-[var(--muted)]">
+                        <IconTrash size={13} /> 파일을 찾을 수 없어요
+                      </div>
+                    ) : (
+                      <AttachmentView
+                        url={m.attachmentUrl}
+                        type={m.attachmentType}
+                        name={m.attachmentName}
+                      />
+                    )}
+                    {m.content.trim() && (
+                      <p className="mb-2 line-clamp-2 text-[12px] text-[var(--muted)]">
+                        {m.content}
+                      </p>
+                    )}
+                    <div className="flex items-center justify-end gap-1 font-mono text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => onJump(m.id)}
+                        className="rounded-lg px-2.5 py-1.5 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+                      >
+                        이동
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => unpin(m)}
+                        disabled={busyId === m.id}
+                        className="rounded-lg px-2.5 py-1.5 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--fg)] disabled:opacity-40"
+                      >
+                        {busyId === m.id ? "해제 중…" : "해제"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => del(m)}
+                        className="rounded-lg px-2.5 py-1.5 text-[#ff5e3a] hover:bg-[var(--hover)]"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-3">
+            {letters === null && (
+              <p className="px-2 py-8 text-center font-mono text-[12px] text-[var(--muted)]">
+                불러오는 중…
+              </p>
+            )}
+            {letters?.length === 0 && (
+              <p className="px-2 py-10 text-center font-mono text-[12px] leading-relaxed text-[var(--muted)]">
+                아직 편지가 없어요.
+                <br />
+                긴 메시지는 자동으로 편지가 되어 여기에 모여요.
+              </p>
+            )}
+            <div className="space-y-2">
+              {letters?.map((m) => {
+                const p = personaBy(m.personaId);
+                return (
+                  <button
+                    type="button"
+                    key={m.id}
+                    onClick={() => onOpenLetter(m)}
+                    className="block w-full rounded-xl border border-[var(--line)] p-3 text-left transition-colors hover:bg-[var(--hover)]"
+                  >
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <Avatar persona={p} size={22} />
+                      <span className="truncate text-[13px]">{p?.name}</span>
+                      <span className="ml-auto shrink-0 font-mono text-[9px] text-[var(--muted)]">
+                        {timeOf(m.sentAt)}
+                      </span>
+                    </div>
+                    <p className="line-clamp-3 whitespace-pre-wrap text-[12px] leading-relaxed text-[var(--muted)]">
                       {m.content}
                     </p>
-                  )}
-                  <div className="flex items-center justify-end gap-1 font-mono text-[10px]">
-                    <button
-                      type="button"
-                      onClick={() => onJump(m.id)}
-                      className="rounded-lg px-2.5 py-1.5 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--fg)]"
-                    >
-                      이동
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => unpin(m)}
-                      disabled={busyId === m.id}
-                      className="rounded-lg px-2.5 py-1.5 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--fg)] disabled:opacity-40"
-                    >
-                      {busyId === m.id ? "해제 중…" : "해제"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => del(m)}
-                      className="rounded-lg px-2.5 py-1.5 text-[#ff5e3a] hover:bg-[var(--hover)]"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                    <span className="mt-1.5 flex items-center gap-1 font-mono text-[10px] text-[var(--accent)]">
+                      <IconMail size={11} /> 편지 읽기
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
