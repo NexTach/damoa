@@ -461,7 +461,7 @@ function PersonaeInner() {
     setMessages(await hydrateMessages(page.messages));
     setCursor(page.nextCursor);
     setHasMore(page.hasMore);
-    setSender(r.selfPersonaId ?? r.participantPersonaIds[0] ?? null);
+    setSender(r.participantPersonaIds[0] ?? null);
   }, []);
 
   // Jump to a (possibly old) message from search: load the page ending at it.
@@ -761,7 +761,6 @@ function PersonaeInner() {
     const r = await createRoom({
       title,
       participantPersonaIds: [],
-      selfPersonaId: null,
     });
     setRooms((cur) => [r, ...cur]);
     openRoom(r);
@@ -788,17 +787,11 @@ function PersonaeInner() {
       title: patch.title ?? room.title,
       participantPersonaIds:
         patch.participantPersonaIds ?? room.participantPersonaIds,
-      selfPersonaId:
-        patch.selfPersonaId !== undefined
-          ? patch.selfPersonaId
-          : room.selfPersonaId,
     });
     setRoom(updated);
     setRooms((cur) => cur.map((r) => (r.id === updated.id ? updated : r)));
     if (sender == null)
-      setSender(
-        updated.selfPersonaId ?? updated.participantPersonaIds[0] ?? null,
-      );
+      setSender(updated.participantPersonaIds[0] ?? null);
   };
 
   // Export the room as an OpenAI chat fine-tuning JSON. The chosen persona maps
@@ -1091,7 +1084,6 @@ function PersonaeInner() {
     const updated = await updateRoom(r.id, {
       title: name,
       participantPersonaIds: r.participantPersonaIds,
-      selfPersonaId: r.selfPersonaId,
     });
     setRooms((cur) => cur.map((x) => (x.id === updated.id ? updated : x)));
     if (room?.id === updated.id) setRoom(updated);
@@ -1422,7 +1414,6 @@ function PersonaeInner() {
             )}
             {messages.map((m, i) => {
               const p = personaBy(m.personaId);
-              const mine = m.personaId === room.selfPersonaId;
               const prev = messages[i - 1];
               const next = messages[i + 1];
               // Group consecutive messages from the same persona within GROUP_GAP.
@@ -1451,30 +1442,29 @@ function PersonaeInner() {
                   )}
                   <div
                     data-mid={m.id}
-                    className={`group relative flex items-start gap-2 rounded-2xl ${grouped && !showDate ? "mt-0.5" : "mt-4"} ${mine ? "flex-row-reverse" : ""} ${highlightId === m.id ? "bg-[var(--accent)]/15 ring-1 ring-[var(--accent)] transition-colors" : "transition-colors"}`}
+                    className={`group relative flex items-start gap-2 rounded-2xl ${grouped && !showDate ? "mt-0.5" : "mt-4"} ${highlightId === m.id ? "bg-[var(--accent)]/15 ring-1 ring-[var(--accent)] transition-colors" : "transition-colors"}`}
                   >
-                    {!mine &&
-                      (grouped ? (
-                        <div className="w-7 shrink-0" />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => p && setQuickPersona(p)}
-                          aria-label={`${p?.name ?? "페르소나"} 편집`}
-                          title="페르소나 편집"
-                          className="shrink-0 rounded-full transition-opacity hover:opacity-80"
-                        >
-                          <Avatar persona={p} size={28} />
-                        </button>
-                      ))}
+                    {grouped ? (
+                      <div className="w-7 shrink-0" />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => p && setQuickPersona(p)}
+                        aria-label={`${p?.name ?? "페르소나"} 편집`}
+                        title="페르소나 편집"
+                        className="shrink-0 rounded-full transition-opacity hover:opacity-80"
+                      >
+                        <Avatar persona={p} size={28} />
+                      </button>
+                    )}
                     <div
                       onTouchStart={(e) => onMsgTouchStart(m, e)}
                       onTouchMove={onMsgTouchMove}
                       onTouchEnd={(e) => onMsgTouchEnd(m, e)}
                       onContextMenu={(e) => onMsgContextMenu(m, e)}
-                      className={`flex max-w-[68%] min-w-0 select-none flex-col [-webkit-touch-callout:none] ${mine ? "items-end text-right" : "items-start"}`}
+                      className="flex max-w-[68%] min-w-0 select-none flex-col items-start [-webkit-touch-callout:none]"
                     >
-                      {!mine && !grouped && (
+                      {!grouped && (
                         <span className="mb-1 font-mono text-[10px] text-[var(--muted)]">
                           {p?.name}
                         </span>
@@ -1550,14 +1540,10 @@ function PersonaeInner() {
                           {m.content && (
                             <div
                               className="whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl px-4 py-2 text-[14px] leading-relaxed"
-                              style={
-                                mine
-                                  ? { background: "#27e8a7", color: "#04130d" }
-                                  : {
-                                      background: "var(--surface)",
-                                      color: "var(--fg)",
-                                    }
-                              }
+                              style={{
+                                background: "var(--surface)",
+                                color: "var(--fg)",
+                              }}
                             >
                               {isLetter(m.content) ? (
                                 <>
@@ -2276,13 +2262,7 @@ function RoomSettings({
     const set = new Set(room.participantPersonaIds);
     if (set.has(id)) set.delete(id);
     else set.add(id);
-    const ids = [...set];
-    onPatch({
-      participantPersonaIds: ids,
-      selfPersonaId: ids.includes(room.selfPersonaId ?? -1)
-        ? room.selfPersonaId
-        : null,
-    });
+    onPatch({ participantPersonaIds: [...set] });
   };
   return (
     <div className="fixed inset-0 z-[70] wide:absolute wide:inset-auto wide:right-6 wide:top-16">
@@ -2757,18 +2737,22 @@ function HighlightsPanel({
   }, [load]);
 
   // Letters aren't a server concept — pull the whole history and filter the
-  // long messages client-side. Loaded lazily when the tab is first opened.
+  // long messages client-side. Decryption is the slow part, so only decrypt
+  // candidates long enough to possibly be a letter (raw ciphertext/plaintext
+  // length), instead of every message in the room.
   const loadLetters = useCallback(async () => {
     try {
-      let all: Message[] = [];
+      let raw: Message[] = [];
       let before: string | undefined;
       while (true) {
         const page = await listMessages(roomId, { limit: 100, before });
-        all = [...(await hydrateMessages(page.messages)), ...all];
+        raw = [...page.messages, ...raw];
         if (!page.hasMore || !page.nextCursor) break;
         before = page.nextCursor;
       }
-      setLetters(all.filter((m) => isLetter(m.content)).reverse());
+      const candidates = raw.filter((m) => m.content.length >= 150);
+      const decrypted = await hydrateMessages(candidates);
+      setLetters(decrypted.filter((m) => isLetter(m.content)).reverse());
     } catch {
       setLetters([]);
     }
@@ -2803,10 +2787,10 @@ function HighlightsPanel({
     <button
       type="button"
       onClick={() => setTab(id)}
-      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-[12px] transition-colors ${
+      className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[11px] tracking-[0.1em] transition-colors ${
         tab === id
-          ? "bg-[var(--fg)] text-[var(--bg)]"
-          : "text-[var(--muted)] hover:text-[var(--fg)]"
+          ? "border-[var(--fg)] text-[var(--fg)]"
+          : "border-[var(--line)] text-[var(--muted)] hover:text-[var(--fg)]"
       }`}
     >
       {icon}
