@@ -1674,9 +1674,6 @@ function PersonaeInner() {
                     >
                       <Avatar persona={p} size={16} />
                       {p?.name}
-                      {pid === room.selfPersonaId && (
-                        <span className="opacity-60">(나)</span>
-                      )}
                     </button>
                   );
                 })}
@@ -2332,7 +2329,6 @@ function RoomSettings({
         <div className="space-y-1">
           {personas.map((p) => {
             const inRoom = room.participantPersonaIds.includes(p.id);
-            const isSelf = room.selfPersonaId === p.id;
             return (
               <div
                 key={p.id}
@@ -2352,21 +2348,6 @@ function RoomSettings({
                   <Avatar persona={p} size={20} />
                   <span className="text-[13px]">{p.name}</span>
                 </button>
-                {inRoom && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onPatch({ selfPersonaId: isSelf ? null : p.id })
-                    }
-                    className={`rounded-full px-2 py-0.5 font-mono text-[9px] ${
-                      isSelf
-                        ? "bg-[#27e8a7] text-black"
-                        : "border border-[var(--line)] text-[var(--muted)]"
-                    }`}
-                  >
-                    나
-                  </button>
-                )}
               </div>
             );
           })}
