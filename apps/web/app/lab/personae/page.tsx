@@ -876,27 +876,21 @@ function PersonaeInner() {
       const blob = new Blob([JSON.stringify({ messages }, null, 2)], {
         type: "application/json",
       });
-      // Prefer the native share sheet on mobile (blob downloads are unreliable
-      // there); fall back to a normal anchor download elsewhere.
-      const file = new File([blob], filename, { type: "application/json" });
-      const nav = navigator as Navigator & {
-        canShare?: (d: { files: File[] }) => boolean;
-      };
-      if (nav.canShare?.({ files: [file] })) {
-        await nav.share({ files: [file], title: filename });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      }
+      // Anchor download — navigator.share can't be used here because the long
+      // async fetch above consumes the click's user-activation, which share
+      // requires ("Must be handling a user gesture").
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.rel = "noopener";
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
       notify(`JSON 추출 완료 (${all.length}개 메시지)`);
     } catch (e) {
-      if ((e as Error)?.name === "AbortError") return; // user cancelled share
       notify(`추출 실패: ${e instanceof Error ? e.message : "오류"}`, 6000);
     } finally {
       setExporting(false);
