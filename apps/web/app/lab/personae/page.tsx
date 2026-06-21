@@ -16,6 +16,8 @@ import {
   IconArrowLeft,
   IconCamera,
   IconChart,
+  IconCheck,
+  IconClock,
   IconCopy,
   IconDownload,
   IconFile,
@@ -73,6 +75,7 @@ import {
   pinMessage,
   type Room,
   setToken,
+  shiftMessages,
   updateMessage,
   updatePersona,
   updateRoom,
@@ -375,6 +378,11 @@ function PersonaeInner() {
   const [letter, setLetter] = useState<Message | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  // Time-shift selection mode.
+  const [shiftMode, setShiftMode] = useState(false);
+  const [shiftAnchor, setShiftAnchor] = useState<number | null>(null);
+  const [shiftSel, setShiftSel] = useState<Set<number>>(new Set());
+  const [shiftOpen, setShiftOpen] = useState(false);
   const noticeTimer = useRef<number | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -457,6 +465,9 @@ function PersonaeInner() {
     setSearchOpen(false);
     setStatsOpen(false);
     setHighlightsOpen(false);
+    setShiftMode(false);
+    setShiftAnchor(null);
+    setShiftSel(new Set());
     const page = await listMessages(r.id, { limit: 40 });
     stickBottom.current = true;
     setJumped(false);
@@ -906,9 +917,55 @@ function PersonaeInner() {
     setMessages((cur) => cur.filter((m) => m.id !== id));
   };
 
+  // Time-shift: enter selection mode anchored on a message, toggle others,
+  // then shift all selected by the same delta (relative gaps preserved).
+  const startShift = (m: Message) => {
+    setShiftMode(true);
+    setShiftAnchor(m.id);
+    setShiftSel(new Set([m.id]));
+  };
+  const exitShift = () => {
+    setShiftMode(false);
+    setShiftAnchor(null);
+    setShiftSel(new Set());
+    setShiftOpen(false);
+  };
+  const toggleShiftSel = (id: number) => {
+    if (id === shiftAnchor) return; // anchor stays selected (time baseline)
+    setShiftSel((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const applyShift = async (newAtLocal: string) => {
+    if (!room || shiftAnchor == null) return;
+    const anchor = messages.find((m) => m.id === shiftAnchor);
+    if (!anchor) return;
+    const delta =
+      new Date(newAtLocal).getTime() - new Date(anchor.sentAt).getTime();
+    setShiftOpen(false);
+    if (!delta || shiftSel.size === 0) return exitShift();
+    setSending(true);
+    try {
+      await shiftMessages(room.id, [...shiftSel], delta);
+      const page = await listMessages(room.id, { limit: 40 });
+      stickBottom.current = true;
+      setMessages(await hydrateMessages(page.messages));
+      setCursor(page.nextCursor);
+      setHasMore(page.hasMore);
+      refreshRooms();
+      notify(`${shiftSel.size}개 메시지의 시간을 이동했어요`);
+    } finally {
+      setSending(false);
+      exitShift();
+    }
+  };
+
   // Long-press (touch) opens the message action menu as a bottom sheet.
   const startPress = (m: Message) => {
-    if (editing) return;
+    if (editing || shiftMode) return;
     pressTimer.current = window.setTimeout(() => {
       pressTimer.current = null;
       setActionPos(null); // touch → bottom sheet
@@ -934,6 +991,7 @@ function PersonaeInner() {
 
   // Swipe a bubble sideways to reply (mobile); long-press still opens actions.
   const onMsgTouchStart = (m: Message, e: React.TouchEvent<HTMLDivElement>) => {
+    if (shiftMode) return; // selection mode: tap toggles, no swipe/long-press
     touching.current = true;
     startPress(m);
     const t = e.touches[0];
@@ -965,7 +1023,7 @@ function PersonaeInner() {
   };
   const onMsgContextMenu = (m: Message, e: React.MouseEvent) => {
     e.preventDefault();
-    if (touching.current) return; // touch long-press handles this as a sheet
+    if (touching.current || shiftMode) return;
     setActionPos({ x: e.clientX, y: e.clientY });
     setActionMsg(m);
   };
@@ -1014,10 +1072,17 @@ function PersonaeInner() {
     if (!room || !editing || sending) return;
     setSending(true);
     try {
+      // Only send sentAt when the time was actually changed — the input is
+      // minute-precision, so always sending it would zero the seconds and
+      // reorder messages within the same minute.
+      const orig = messages.find((m) => m.id === editing.id);
+      const timeChanged = !orig || toLocalInput(orig.sentAt) !== editing.at;
       const updated = await updateMessage(room.id, editing.id, {
         personaId: editing.personaId,
         content: await encryptText(editing.content),
-        sentAt: new Date(editing.at).toISOString(),
+        ...(timeChanged
+          ? { sentAt: new Date(editing.at).toISOString() }
+          : {}),
       });
       const msg = await decryptMessage(updated);
       setMessages((cur) =>
@@ -1355,8 +1420,36 @@ function PersonaeInner() {
                   )}
                   <div
                     data-mid={m.id}
-                    className={`group relative flex items-start gap-2 rounded-2xl ${grouped && !showDate ? "mt-0.5" : "mt-4"} ${highlightId === m.id ? "bg-[var(--accent)]/15 ring-1 ring-[var(--accent)] transition-colors" : "transition-colors"}`}
+                    className={`group relative flex items-start gap-2 rounded-2xl px-1 ${grouped && !showDate ? "mt-0.5" : "mt-4"} ${
+                      (shiftMode && shiftSel.has(m.id)) || highlightId === m.id
+                        ? "bg-[var(--accent)]/15 ring-1 ring-[var(--accent)] transition-colors"
+                        : "transition-colors"
+                    }`}
                   >
+                    {shiftMode && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => toggleShiftSel(m.id)}
+                          aria-label="선택 토글"
+                          className="absolute inset-0 z-20 cursor-pointer rounded-2xl"
+                        />
+                        <span
+                          className={`pointer-events-none absolute right-1.5 top-1.5 z-30 grid h-5 w-5 place-items-center rounded-full ${
+                            shiftSel.has(m.id)
+                              ? "bg-[var(--accent)] text-black"
+                              : "border border-[var(--muted)] text-transparent"
+                          }`}
+                        >
+                          <IconCheck size={12} />
+                        </span>
+                        {shiftAnchor === m.id && (
+                          <span className="pointer-events-none absolute right-8 top-1.5 z-30 rounded bg-[var(--fg)] px-1.5 py-0.5 font-mono text-[8px] tracking-[0.1em] text-[var(--bg)]">
+                            기준
+                          </span>
+                        )}
+                      </>
+                    )}
                     {grouped ? (
                       <div className="w-7 shrink-0" />
                     ) : (
@@ -1523,7 +1616,30 @@ function PersonaeInner() {
             </button>
           )}
 
-          {/* 작성 — 입력창은 유지, 캡처 모드에선 페르소나 선택기만 숨김 */}
+          {/* 시간 이동 선택 모드 하단 바 */}
+          {shiftMode ? (
+            <div className="pb-safe flex items-center justify-between gap-3 border-t border-[var(--line)] px-4 pt-4 md:px-6 md:pb-4">
+              <button
+                type="button"
+                onClick={exitShift}
+                className="font-mono text-[12px] text-[var(--muted)] hover:text-[var(--fg)]"
+              >
+                취소
+              </button>
+              <span className="font-mono text-[11px] text-[var(--muted)]">
+                <IconClock size={12} className="mr-1 inline" />
+                {shiftSel.size}개 선택 · 탭하여 추가
+              </span>
+              <button
+                type="button"
+                onClick={() => setShiftOpen(true)}
+                disabled={shiftSel.size === 0 || sending}
+                className="rounded-full bg-[var(--fg)] px-4 py-2 font-mono text-[12px] text-[var(--bg)] disabled:opacity-40"
+              >
+                시간 이동
+              </button>
+            </div>
+          ) : (
           <div className="pb-safe border-t border-[var(--line)] px-4 pt-4 md:px-6 md:pb-4">
             {replyTo && (
               <div className="mb-3 flex items-center gap-2 overflow-hidden rounded-xl border-l-2 border-[var(--accent)] bg-[var(--surface)] px-3 py-2">
@@ -1695,6 +1811,7 @@ function PersonaeInner() {
               </button>
             </div>
           </div>
+          )}
         </section>
       )}
       {personaModal && (
@@ -1737,6 +1854,15 @@ function PersonaeInner() {
           onClose={() => setLetter(null)}
         />
       )}
+      {shiftOpen && shiftAnchor != null && (
+        <ShiftModal
+          anchor={messages.find((m) => m.id === shiftAnchor) ?? null}
+          count={shiftSel.size}
+          busy={sending}
+          onApply={applyShift}
+          onClose={() => setShiftOpen(false)}
+        />
+      )}
       {notice && (
         <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[150] flex justify-center px-4">
           <div className="pointer-events-auto max-w-sm rounded-full border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-center font-mono text-[11px] leading-relaxed text-[var(--fg)] shadow-2xl">
@@ -1769,6 +1895,11 @@ function PersonaeInner() {
           onEdit={() => {
             startEdit(actionMsg);
             setActionMsg(null);
+          }}
+          onShift={() => {
+            const msg = actionMsg;
+            setActionMsg(null);
+            startShift(msg);
           }}
           onDelete={() => {
             const id = actionMsg.id;
@@ -1928,6 +2059,7 @@ function ActionSheet({
   onReply,
   onCopy,
   onEdit,
+  onShift,
   onDelete,
   onClose,
 }: {
@@ -1940,6 +2072,7 @@ function ActionSheet({
   onReply: () => void;
   onCopy: () => void;
   onEdit: () => void;
+  onShift: () => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -1966,6 +2099,11 @@ function ActionSheet({
             icon={<IconPencil size={16} />}
             label="수정"
             onClick={onEdit}
+          />
+          <MenuItem
+            icon={<IconClock size={16} />}
+            label="시간 이동"
+            onClick={onShift}
           />
           <MenuItem
             icon={<IconTrash size={16} />}
@@ -2554,6 +2692,71 @@ function PersonaQuickEdit({
             삭제
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Sets a new time for the anchor message; the whole selection shifts by the
+// same delta (relative gaps preserved).
+function ShiftModal({
+  anchor,
+  count,
+  busy,
+  onApply,
+  onClose,
+}: {
+  anchor: Message | null;
+  count: number;
+  busy: boolean;
+  onApply: (newAtLocal: string) => void;
+  onClose: () => void;
+}) {
+  const [at, setAt] = useState(anchor ? toLocalInput(anchor.sentAt) : "");
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/65 sm:items-center sm:p-4"
+      onClick={onClose}
+      // biome-ignore lint/a11y/noStaticElementInteractions: backdrop close
+      role="presentation"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        // biome-ignore lint/a11y/noStaticElementInteractions: stop backdrop close
+        role="presentation"
+        className="pb-safe sheet-up w-full max-w-sm rounded-t-2xl border border-[var(--line)] bg-[var(--bg-2)] p-5 shadow-2xl sm:rounded-2xl"
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <span className="flex items-center gap-2 font-display text-lg">
+            <IconClock size={18} /> 시간 이동
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="text-[var(--muted)] hover:text-[var(--fg)]"
+          >
+            <IconX size={18} />
+          </button>
+        </div>
+        <p className="mb-3 font-mono text-[11px] leading-relaxed text-[var(--muted)]">
+          기준 메시지의 새 시각을 정하면 선택한 {count}개 메시지가 같은
+          간격을 유지한 채 함께 이동해요.
+        </p>
+        <input
+          type="datetime-local"
+          value={at}
+          onChange={(e) => setAt(e.target.value)}
+          className="mb-4 w-full rounded-lg border border-[var(--line)] bg-transparent px-3 py-2 font-mono text-[13px] outline-none focus:border-[var(--muted)]"
+        />
+        <button
+          type="button"
+          onClick={() => onApply(at)}
+          disabled={busy || !at}
+          className="w-full rounded-xl bg-[var(--fg)] py-2.5 font-mono text-xs text-[var(--bg)] disabled:opacity-40"
+        >
+          {busy ? "이동 중…" : "이동"}
+        </button>
       </div>
     </div>
   );
