@@ -311,6 +311,18 @@ export const listPinned = (roomId: number) =>
 export const listLetters = (roomId: number) =>
   tm<Message[]>(`/rooms/${roomId}/messages/letters`);
 
+/**
+ * Download URL for the server-generated training JSON (latest `limit` messages,
+ * decrypted server-side). Token is in the query since a download navigation
+ * can't set an Authorization header.
+ */
+export const exportTrainingUrl = (
+  roomId: number,
+  assistantId: number,
+  limit = 1000,
+) =>
+  `${BASE}/api/personae/rooms/${roomId}/messages/export?assistant=${assistantId}&limit=${limit}&token=${encodeURIComponent(getToken() ?? "")}`;
+
 /** Toggles a message's highlight (pin) state. */
 export const pinMessage = (
   roomId: number,

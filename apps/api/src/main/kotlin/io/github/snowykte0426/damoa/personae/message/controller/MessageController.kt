@@ -9,6 +9,9 @@ import io.github.snowykte0426.damoa.personae.message.dto.response.SearchResult
 import io.github.snowykte0426.damoa.personae.message.service.MessageService
 import io.github.snowykte0426.damoa.personae.realtime.dto.response.RealtimeEvent
 import io.github.snowykte0426.damoa.personae.realtime.service.RealtimeService
+import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -27,6 +30,24 @@ class MessageController(
     private val service: MessageService,
     private val realtime: RealtimeService,
 ) {
+    // Server-side training-data export: builds the JSON (decrypting in memory)
+    // and serves it as a download (Spring serializes the body; Content-Disposition
+    // forces a download). Auth via ?token= (a download navigation can't set
+    // headers). Caps at the latest [limit] messages.
+    @GetMapping("/export")
+    fun export(
+        @PathVariable roomId: Long,
+        @RequestParam assistant: Long,
+        @RequestParam(defaultValue = "1000") limit: Int,
+    ): ResponseEntity<Map<String, Any?>> {
+        val root = service.exportTraining(currentUserId(), roomId, assistant, limit.coerceIn(1, 2000))
+        return ResponseEntity
+            .ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"personae-room$roomId.json\"")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(root)
+    }
+
     @GetMapping
     fun list(
         @PathVariable roomId: Long,

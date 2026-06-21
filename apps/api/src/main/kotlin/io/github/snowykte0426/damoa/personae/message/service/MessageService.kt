@@ -60,6 +60,17 @@ interface MessageService {
         roomId: Long,
     ): List<MessageResponse>
 
+    /**
+     * Builds an OpenAI chat fine-tuning JSON ({"messages":[...]}) of the latest
+     * [limit] messages, decrypted server-side. [assistantId] maps to "assistant".
+     */
+    fun exportTraining(
+        ownerId: Long,
+        roomId: Long,
+        assistantId: Long,
+        limit: Int,
+    ): Map<String, Any?>
+
     /** Toggles a message's highlight (pin) state. */
     fun setPin(
         ownerId: Long,

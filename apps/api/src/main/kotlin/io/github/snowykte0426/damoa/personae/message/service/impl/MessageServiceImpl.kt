@@ -11,6 +11,8 @@ import io.github.snowykte0426.damoa.personae.message.entity.Message
 import io.github.snowykte0426.damoa.personae.message.repository.MessageRepository
 import io.github.snowykte0426.damoa.personae.message.service.MessageService
 import io.github.snowykte0426.damoa.personae.message.support.MessageCrypto
+import io.github.snowykte0426.damoa.personae.persona.entity.Persona
+import io.github.snowykte0426.damoa.personae.persona.repository.PersonaRepository
 import io.github.snowykte0426.damoa.personae.room.service.RoomService
 import io.github.snowykte0426.damoa.user.service.UserService
 import org.springframework.data.domain.PageRequest
@@ -23,6 +25,7 @@ class MessageServiceImpl(
     private val repository: MessageRepository,
     private val roomService: RoomService,
     private val userService: UserService,
+    private val personaRepository: PersonaRepository,
     props: AppProperties,
 ) : MessageService {
     private val publicBase = props.s3.publicBase
@@ -172,6 +175,92 @@ class MessageServiceImpl(
             .filter { MessageCrypto.isLetter(MessageCrypto.decrypt(it.content, key)) }
             .map { it.toResponse(publicBase) }
     }
+
+    @Transactional(readOnly = true)
+    override fun exportTraining(
+        ownerId: Long,
+        roomId: Long,
+        assistantId: Long,
+        limit: Int,
+    ): Map<String, Any?> {
+        roomService.requireOwned(ownerId, roomId)
+        val key = userService.get(ownerId)?.encKey
+        // Latest [limit] messages, oldest → newest.
+        val rows =
+            repository
+                .findByRoomIdOrderBySentAtDescIdDesc(roomId, PageRequest.of(0, limit))
+                .reversed()
+
+        // Disambiguate duplicate persona names (mirrors the client export).
+        val byId = personaRepository.findByOwnerIdOrderByCreatedAtAsc(ownerId).associateBy { it.id }
+        val appearingIds = (rows.map { it.personaId } + assistantId).toSet()
+        val appearing = byId.values.filter { it.id in appearingIds }
+        val totals = appearing.groupingBy { displayBase(it) }.eachCount()
+        val seen = mutableMapOf<String, Int>()
+        val disp = mutableMapOf<Long, String>()
+        for (p in appearing) {
+            val base = displayBase(p)
+            val n = (seen[base] ?: 0) + 1
+            seen[base] = n
+            disp[p.id] = if ((totals[base] ?: 0) > 1) "$base ($n)" else base
+        }
+
+        fun nameOf(id: Long): String = disp[id] ?: byId[id]?.let { displayBase(it) } ?: "이름없음"
+
+        val assistantName = nameOf(assistantId)
+        val bios =
+            appearing
+                .filter { !it.bio.isNullOrBlank() }
+                .joinToString("\n") { "- ${nameOf(it.id)}: ${it.bio}" }
+        val others =
+            appearing
+                .filter { it.id != assistantId }
+                .joinToString(", ") { "'${nameOf(it.id)}'" }
+                .ifEmpty { "상대" }
+
+        val out = mutableListOf<Map<String, Any?>>()
+        out +=
+            linkedMapOf(
+                "role" to "system",
+                "content" to
+                    "다음은 '$assistantName'와(과) 다른 참여자($others)의 대화입니다." +
+                    (if (bios.isNotEmpty()) "\n$bios" else "") +
+                    "\n\n'$assistantName'의 말투와 성격으로 응답하세요.",
+            )
+        for (m in rows) {
+            val plain = MessageCrypto.decrypt(m.content, key).trim()
+            val mk = attachmentMarker(m)
+            val content = listOf(plain, mk).filter { it.isNotEmpty() }.joinToString(" ")
+            val msg =
+                linkedMapOf<String, Any?>(
+                    "role" to if (m.personaId == assistantId) "assistant" else "user",
+                    "content" to content,
+                    "speaker" to nameOf(m.personaId),
+                    "at" to m.sentAt.toString(),
+                )
+            if (m.replyToId != null) {
+                msg["reply_to"] =
+                    linkedMapOf(
+                        "speaker" to m.replyToName,
+                        "text" to MessageCrypto.decrypt(m.replyToText, key),
+                    )
+            }
+            out += msg
+        }
+        return linkedMapOf("messages" to out)
+    }
+
+    private fun displayBase(p: Persona): String = p.name.trim().ifEmpty { "이름없음" }
+
+    private fun attachmentMarker(m: Message): String =
+        when {
+            m.attachmentExpired -> "[만료된 파일]"
+            m.attachmentType?.startsWith("image/") == true -> "[사진]"
+            m.attachmentType?.startsWith("video/") == true -> "[동영상]"
+            m.attachmentType?.startsWith("audio/") == true -> "[오디오]"
+            m.attachmentKey != null -> "[파일${m.attachmentName?.let { ": $it" } ?: ""}]"
+            else -> ""
+        }
 
     @Transactional
     override fun setPin(

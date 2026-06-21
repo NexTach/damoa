@@ -58,6 +58,7 @@ import {
   fileUrl,
   getToken,
   hydrateMessages,
+  exportTrainingUrl,
   isAuthError,
   listLetters,
   listMessages,
@@ -795,105 +796,22 @@ function PersonaeInner() {
       setSender(updated.participantPersonaIds[0] ?? null);
   };
 
-  // Export the room as an OpenAI chat fine-tuning JSON. The chosen persona maps
-  // to "assistant", everyone else to "user". Messages are E2EE, so we decrypt
-  // them client-side here. Pulls the whole history page by page (oldest→newest).
-  const exportRoom = async (assistantId: number) => {
+  // Export the room as an OpenAI chat fine-tuning JSON. The server decrypts and
+  // builds the file (latest messages only), so we just trigger the download.
+  const exportRoom = (assistantId: number) => {
     if (!room || exporting) return;
     setExporting(true);
     try {
-      let all: Message[] = [];
-      let before: string | undefined;
-      while (true) {
-        const page = await listMessages(room.id, { limit: 100, before });
-        all = [...(await hydrateMessages(page.messages)), ...all];
-        if (!page.hasMore || !page.nextCursor) break;
-        before = page.nextCursor;
-      }
-      const parts = room.participantPersonaIds
-        .map(personaBy)
-        .filter((p): p is Persona => !!p);
-      const marker = (m: Message) => {
-        const kind = attachmentKind(m);
-        if (kind === "none") return "";
-        if (kind === "file")
-          return `[파일${m.attachmentName ? `: ${m.attachmentName}` : ""}]`;
-        return `[${ATTACHMENT_LABEL[kind]}]`;
-      };
-      // Personas often share a name (e.g. the account default), so disambiguate
-      // duplicates with a suffix and use that consistently as the display name.
-      const total = new Map<string, number>();
-      for (const p of parts) {
-        const b = p.name?.trim() || "이름없음";
-        total.set(b, (total.get(b) ?? 0) + 1);
-      }
-      const seen = new Map<string, number>();
-      const dispName = new Map<number, string>();
-      for (const p of parts) {
-        const b = p.name?.trim() || "이름없음";
-        const i = (seen.get(b) ?? 0) + 1;
-        seen.set(b, i);
-        dispName.set(p.id, (total.get(b) ?? 0) > 1 ? `${b} (${i})` : b);
-      }
-      const nameOf = (id: number) =>
-        dispName.get(id) || personaBy(id)?.name?.trim() || "이름없음";
-
-      const name = nameOf(assistantId);
-      // Only list bios that exist, to avoid an awkward bare list of names.
-      const bios = parts
-        .filter((p) => p.bio?.trim())
-        .map((p) => `- ${nameOf(p.id)}: ${p.bio}`)
-        .join("\n");
-      const others = parts
-        .filter((p) => p.id !== assistantId)
-        .map((p) => `'${nameOf(p.id)}'`)
-        .join(", ");
-      const messages: Record<string, unknown>[] = [
-        {
-          role: "system",
-          content: `다음은 '${name}'와(과) 다른 참여자(${others || "상대"})의 대화입니다.${bios ? `\n${bios}` : ""}\n\n'${name}'의 말투와 성격으로 응답하세요.`,
-        },
-      ];
-      for (const m of all) {
-        const mk = marker(m);
-        const text = m.content.trim();
-        const msg: Record<string, unknown> = {
-          role: m.personaId === assistantId ? "assistant" : "user",
-          content: [text, mk].filter(Boolean).join(text && mk ? " " : ""),
-          speaker: nameOf(m.personaId),
-          at: m.sentAt,
-        };
-        if (m.replyToId)
-          msg.reply_to = { speaker: m.replyToName, text: m.replyToText };
-        messages.push(msg);
-      }
-      const safe = (s: string) =>
-        s
-          .replace(/[^\w가-힣.-]+/g, "_")
-          .replace(/^_+|_+$/g, "")
-          .slice(0, 40) || "chat";
-      const filename = `personae-${safe(room.title)}-${safe(name)}.json`;
-      const blob = new Blob([JSON.stringify({ messages }, null, 2)], {
-        type: "application/json",
-      });
-      // Anchor download — navigator.share can't be used here because the long
-      // async fetch above consumes the click's user-activation, which share
-      // requires ("Must be handling a user gesture").
-      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
+      a.href = exportTrainingUrl(room.id, assistantId);
       a.rel = "noopener";
       a.target = "_blank";
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-      notify(`JSON 추출 완료 (${all.length}개 메시지)`);
-    } catch (e) {
-      notify(`추출 실패: ${e instanceof Error ? e.message : "오류"}`, 6000);
+      notify("최신 대화로 JSON을 추출했어요");
     } finally {
-      setExporting(false);
+      setTimeout(() => setExporting(false), 1200);
     }
   };
 
