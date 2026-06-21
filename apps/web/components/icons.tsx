@@ -169,6 +169,15 @@ export function IconStar({
   );
 }
 
+export function IconSparkle({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden>
+      <path d="M12 3l1.8 4.7L18.5 9.5 13.8 11.3 12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
+      <path d="M18.5 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+    </svg>
+  );
+}
+
 export function IconClock({ size = 16, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden>

@@ -86,4 +86,11 @@ interface MessageService {
         ids: List<Long>,
         deltaMs: Long,
     )
+
+    /** Generates and stores an AI reply spoken by [personaId], using OpenAI. */
+    fun generateReply(
+        ownerId: Long,
+        roomId: Long,
+        personaId: Long,
+    ): MessageResponse
 }

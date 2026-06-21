@@ -344,3 +344,13 @@ export const shiftMessages = (
     method: "POST",
     body: JSON.stringify({ ids, deltaMs }),
   });
+
+/** Whether server-side AI generation is configured (OpenAI key present). */
+export const aiStatus = () => tm<{ enabled: boolean }>("/ai");
+
+/** Generates and stores an AI reply spoken by the persona, returns it. */
+export const generateReply = (roomId: number, personaId: number) =>
+  tm<Message>(`/rooms/${roomId}/messages/generate`, {
+    method: "POST",
+    body: JSON.stringify({ personaId }),
+  });

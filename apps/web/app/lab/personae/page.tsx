@@ -29,6 +29,7 @@ import {
   IconSearch,
   IconSend,
   IconSettings,
+  IconSparkle,
   IconStar,
   IconTrash,
   IconX,
@@ -60,7 +61,9 @@ import {
   fileUrl,
   getToken,
   hydrateMessages,
+  aiStatus,
   exportTrainingUrl,
+  generateReply,
   isAuthError,
   listLetters,
   listMessages,
@@ -383,6 +386,8 @@ function PersonaeInner() {
   const [shiftAnchor, setShiftAnchor] = useState<number | null>(null);
   const [shiftSel, setShiftSel] = useState<Set<number>>(new Set());
   const [shiftOpen, setShiftOpen] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const noticeTimer = useRef<number | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -710,6 +715,9 @@ function PersonaeInner() {
         fetchMe()
           .then(setMe)
           .catch(() => {});
+        aiStatus()
+          .then((s) => setAiEnabled(s.enabled))
+          .catch(() => {});
         if (rs.length) openRoom(rs[0]);
       } catch (e) {
         if (isAuthError(e)) clearToken();
@@ -897,6 +905,36 @@ function PersonaeInner() {
       setSending(false);
     }
   };
+
+  // AI mode: generate the selected persona's next line via OpenAI and append it.
+  const generate = async () => {
+    if (!room || sender == null || generating || sending) return;
+    setGenerating(true);
+    stickBottom.current = true;
+    requestAnimationFrame(() =>
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }),
+    );
+    try {
+      const created = await generateReply(room.id, sender);
+      const msg = await decryptMessage(created);
+      stickBottom.current = true;
+      if (jumped) {
+        setJumped(false);
+        const page = await listMessages(room.id, { limit: 40 });
+        setMessages(await hydrateMessages(page.messages));
+        setCursor(page.nextCursor);
+        setHasMore(page.hasMore);
+      } else {
+        setMessages((cur) => [...cur, msg]);
+      }
+      refreshRooms();
+    } catch (e) {
+      if (!isAuthError(e)) notify("AI 응답 생성에 실패했어요");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   // Highlight (pin) a message's attachment so it's never auto-purged.
   const togglePin = async (m: Message) => {
     if (!room) return;
@@ -1604,6 +1642,19 @@ function PersonaeInner() {
                 </Fragment>
               );
             })}
+            {generating && sender != null && (
+              <div className="mt-4 flex items-start gap-2">
+                <Avatar persona={personaBy(sender)} size={28} />
+                <div
+                  className="flex items-center gap-1 rounded-2xl px-4 py-3"
+                  style={{ background: "var(--surface)" }}
+                >
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                </div>
+              </div>
+            )}
           </div>
 
           {(jumped || !atBottom) && (
@@ -1757,6 +1808,22 @@ function PersonaeInner() {
                   <IconPaperclip size={18} />
                 )}
               </button>
+              {aiEnabled && (
+                <button
+                  type="button"
+                  onClick={generate}
+                  disabled={sender == null || busy || generating}
+                  aria-label="AI로 다음 대사 생성"
+                  title="AI로 다음 대사 생성"
+                  className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-[var(--line)] bg-[var(--bg-2)] text-[var(--accent)] hover:text-[var(--fg)] disabled:opacity-30"
+                >
+                  {generating ? (
+                    <Spinner size={16} />
+                  ) : (
+                    <IconSparkle size={18} />
+                  )}
+                </button>
+              )}
               <textarea
                 ref={composerRef}
                 value={draft}

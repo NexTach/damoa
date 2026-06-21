@@ -9,4 +9,11 @@ data class AppProperties(
     val attachmentTtlDays: Long = 30,
     val datagsm: DataGsmProperties = DataGsmProperties(),
     val s3: S3Properties = S3Properties(),
+    val openai: OpenAiProperties = OpenAiProperties(),
+)
+
+data class OpenAiProperties(
+    val apiKey: String = "",
+    val model: String = "gpt-4o-mini",
+    val baseUrl: String = "https://api.openai.com",
 )

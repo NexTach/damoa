@@ -2,6 +2,7 @@ package io.github.snowykte0426.damoa.personae.message.service.impl
 
 import io.github.snowykte0426.damoa.common.notFound
 import io.github.snowykte0426.damoa.config.AppProperties
+import io.github.snowykte0426.damoa.personae.ai.service.AiService
 import io.github.snowykte0426.damoa.personae.message.dto.request.MessageRequest
 import io.github.snowykte0426.damoa.personae.message.dto.response.MessagePage
 import io.github.snowykte0426.damoa.personae.message.dto.response.MessageResponse
@@ -26,6 +27,7 @@ class MessageServiceImpl(
     private val roomService: RoomService,
     private val userService: UserService,
     private val personaRepository: PersonaRepository,
+    private val aiService: AiService,
     props: AppProperties,
 ) : MessageService {
     private val publicBase = props.s3.publicBase
@@ -275,6 +277,52 @@ class MessageServiceImpl(
         msgs.forEach { it.sentAt = it.sentAt.plusMillis(deltaMs) }
         repository.saveAll(msgs)
         roomService.touch(roomId)
+    }
+
+    @Transactional
+    override fun generateReply(
+        ownerId: Long,
+        roomId: Long,
+        personaId: Long,
+    ): MessageResponse {
+        roomService.requireOwned(ownerId, roomId)
+        val persona =
+            personaRepository.findByIdAndOwnerId(personaId, ownerId) ?: notFound("persona not found")
+        val key = userService.get(ownerId)?.encKey
+        val byId = personaRepository.findByOwnerIdOrderByCreatedAtAsc(ownerId).associateBy { it.id }
+        val rows =
+            repository
+                .findByRoomIdOrderBySentAtDescIdDesc(roomId, PageRequest.of(0, 40))
+                .reversed()
+
+        val system =
+            "너는 '${persona.name}'이다." +
+                (persona.bio?.takeIf { it.isNotBlank() }?.let { " 인물 설정: $it." } ?: "") +
+                " 아래 대화 맥락에 이어 '${persona.name}'로서 다음에 보낼 메시지 한 개만 한국어로 자연스럽게 작성해라." +
+                " 이름표나 따옴표 없이 대사 내용만 출력해라."
+        val chat = mutableListOf(mapOf("role" to "system", "content" to system))
+        for (m in rows) {
+            val plain = MessageCrypto.decrypt(m.content, key).trim()
+            if (plain.isEmpty()) continue
+            if (m.personaId == personaId) {
+                chat += mapOf("role" to "assistant", "content" to plain)
+            } else {
+                chat += mapOf("role" to "user", "content" to "${byId[m.personaId]?.name ?: "상대"}: $plain")
+            }
+        }
+
+        val reply = aiService.complete(chat)
+        val saved =
+            repository.save(
+                Message(
+                    roomId = roomId,
+                    personaId = personaId,
+                    content = MessageCrypto.encrypt(reply, key),
+                    sentAt = Instant.now(),
+                ),
+            )
+        roomService.touch(roomId)
+        return saved.toResponse(publicBase)
     }
 
     @Transactional

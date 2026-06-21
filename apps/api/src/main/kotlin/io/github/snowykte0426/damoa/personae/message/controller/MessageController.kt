@@ -1,6 +1,7 @@
 package io.github.snowykte0426.damoa.personae.message.controller
 
 import io.github.snowykte0426.damoa.common.currentUserId
+import io.github.snowykte0426.damoa.personae.message.dto.request.GenerateRequest
 import io.github.snowykte0426.damoa.personae.message.dto.request.MessageRequest
 import io.github.snowykte0426.damoa.personae.message.dto.request.PinRequest
 import io.github.snowykte0426.damoa.personae.message.dto.request.ShiftRequest
@@ -31,6 +32,18 @@ class MessageController(
     private val service: MessageService,
     private val realtime: RealtimeService,
 ) {
+    @PostMapping("/generate")
+    fun generate(
+        @PathVariable roomId: Long,
+        @RequestBody req: GenerateRequest,
+        @RequestHeader(value = "X-Client-Id", required = false) clientId: String?,
+    ): MessageResponse {
+        val uid = currentUserId()
+        val res = service.generateReply(uid, roomId, req.personaId)
+        realtime.publish(uid, RealtimeEvent("message", roomId, clientId))
+        return res
+    }
+
     // Server-side training-data export: builds the JSON (decrypting in memory)
     // and serves it as a download (Spring serializes the body; Content-Disposition
     // forces a download). Auth via ?token= (a download navigation can't set
