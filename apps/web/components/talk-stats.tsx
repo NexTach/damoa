@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -15,6 +15,44 @@ import {
 } from "recharts";
 import { fetchRoomStats, isAuthError, type RoomStats } from "@/lib/personae";
 import { IconX } from "./icons";
+
+type Unit = "day" | "week" | "month";
+type DayStat = { date: string; count: number };
+
+// Monday (ISO week start) of a YYYY-MM-DD date, as YYYY-MM-DD.
+function weekStart(s: string): string {
+  const d = new Date(`${s}T00:00:00`);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+// Aggregate per-day counts into the chosen unit.
+function bucketByUnit(perDay: DayStat[], unit: Unit) {
+  if (unit === "day")
+    return perDay.map((d) => ({ label: d.date.slice(5), count: d.count }));
+  const sums = new Map<string, number>();
+  for (const d of perDay) {
+    const key = unit === "month" ? d.date.slice(0, 7) : weekStart(d.date);
+    sums.set(key, (sums.get(key) ?? 0) + d.count);
+  }
+  return [...sums.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, count]) => ({
+      label: unit === "month" ? k.slice(2) : k.slice(5),
+      count,
+    }));
+}
+
+// Default unit by how wide the date range is.
+function defaultUnit(perDay: DayStat[]): Unit {
+  if (perDay.length < 2) return "day";
+  const span =
+    (Date.parse(perDay[perDay.length - 1].date) - Date.parse(perDay[0].date)) /
+    86_400_000;
+  return span <= 45 ? "day" : span <= 365 ? "week" : "month";
+}
+
+const UNIT_LABEL: Record<Unit, string> = { day: "일", week: "주", month: "월" };
 
 const axis = { fontSize: 10, fill: "var(--muted)" } as const;
 const tooltipStyle = {
@@ -34,11 +72,16 @@ export default function TalkStats({
 }) {
   const [stats, setStats] = useState<RoomStats | null>(null);
   const [err, setErr] = useState(false);
+  const [unit, setUnit] = useState<Unit>("day");
 
   useEffect(() => {
     let alive = true;
     fetchRoomStats(roomId)
-      .then((s) => alive && setStats(s))
+      .then((s) => {
+        if (!alive) return;
+        setStats(s);
+        setUnit(defaultUnit(s.perDay));
+      })
       .catch((e) => {
         if (!isAuthError(e) && alive) setErr(true);
       });
@@ -46,6 +89,11 @@ export default function TalkStats({
       alive = false;
     };
   }, [roomId]);
+
+  const series = useMemo(
+    () => (stats ? bucketByUnit(stats.perDay, unit) : []),
+    [stats, unit],
+  );
 
   return (
     <div
@@ -130,22 +178,40 @@ export default function TalkStats({
               </section>
 
               <section>
-                <h3 className="mb-2 font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
-                  기간별 (일자)
-                </h3>
-                {stats.perDay.length === 0 ? (
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
+                    기간별
+                  </h3>
+                  <div className="flex gap-1">
+                    {(["day", "week", "month"] as Unit[]).map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => setUnit(u)}
+                        className={`rounded-full border px-2.5 py-1 font-mono text-[10px] transition-colors ${
+                          unit === u
+                            ? "border-[var(--fg)] text-[var(--fg)]"
+                            : "border-[var(--line)] text-[var(--muted)] hover:text-[var(--fg)]"
+                        }`}
+                      >
+                        {UNIT_LABEL[u]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {series.length === 0 ? (
                   <p className="font-mono text-[11px] text-[var(--muted)]">
                     데이터 없음
                   </p>
                 ) : (
                   <ResponsiveContainer width="100%" height={200}>
                     <LineChart
-                      data={stats.perDay}
+                      data={series}
                       margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
                     >
                       <CartesianGrid stroke="var(--line)" vertical={false} />
                       <XAxis
-                        dataKey="date"
+                        dataKey="label"
                         tick={axis}
                         tickLine={false}
                         minTickGap={24}
