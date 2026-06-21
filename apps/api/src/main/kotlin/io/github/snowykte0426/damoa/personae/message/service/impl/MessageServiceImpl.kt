@@ -178,22 +178,33 @@ class MessageServiceImpl(
             .map { it.toResponse(publicBase) }
     }
 
-    @Transactional(readOnly = true)
-    override fun exportTraining(
+    private data class Turn(
+        val role: String,
+        val content: String,
+        val speaker: String,
+        val at: String,
+        val replyTo: Map<String, Any?>?,
+    )
+
+    private data class BuiltMessages(
+        val system: String,
+        val turns: List<Turn>,
+    )
+
+    // Shared builder for both the training export and the AI prompt: same system
+    // prompt, same per-message content (attachment markers folded in), same
+    // duplicate-name disambiguation. Latest [limit] messages, oldest → newest.
+    private fun buildMessages(
         ownerId: Long,
         roomId: Long,
         assistantId: Long,
         limit: Int,
-    ): Map<String, Any?> {
-        roomService.requireOwned(ownerId, roomId)
+    ): BuiltMessages {
         val key = userService.get(ownerId)?.encKey
-        // Latest [limit] messages, oldest → newest.
         val rows =
             repository
                 .findByRoomIdOrderBySentAtDescIdDesc(roomId, PageRequest.of(0, limit))
                 .reversed()
-
-        // Disambiguate duplicate persona names (mirrors the client export).
         val byId = personaRepository.findByOwnerIdOrderByCreatedAtAsc(ownerId).associateBy { it.id }
         val appearingIds = (rows.map { it.personaId } + assistantId).toSet()
         val appearing = byId.values.filter { it.id in appearingIds }
@@ -219,34 +230,51 @@ class MessageServiceImpl(
                 .filter { it.id != assistantId }
                 .joinToString(", ") { "'${nameOf(it.id)}'" }
                 .ifEmpty { "상대" }
+        val system =
+            "다음은 '$assistantName'와(과) 다른 참여자($others)의 대화입니다." +
+                (if (bios.isNotEmpty()) "\n$bios" else "") +
+                "\n\n'$assistantName'의 말투와 성격으로 응답하세요."
 
-        val out = mutableListOf<Map<String, Any?>>()
-        out +=
-            linkedMapOf(
-                "role" to "system",
-                "content" to
-                    "다음은 '$assistantName'와(과) 다른 참여자($others)의 대화입니다." +
-                    (if (bios.isNotEmpty()) "\n$bios" else "") +
-                    "\n\n'$assistantName'의 말투와 성격으로 응답하세요.",
-            )
-        for (m in rows) {
-            val plain = MessageCrypto.decrypt(m.content, key).trim()
-            val mk = attachmentMarker(m)
-            val content = listOf(plain, mk).filter { it.isNotEmpty() }.joinToString(" ")
+        val turns =
+            rows.map { m ->
+                val plain = MessageCrypto.decrypt(m.content, key).trim()
+                val mk = attachmentMarker(m)
+                Turn(
+                    role = if (m.personaId == assistantId) "assistant" else "user",
+                    content = listOf(plain, mk).filter { it.isNotEmpty() }.joinToString(" "),
+                    speaker = nameOf(m.personaId),
+                    at = m.sentAt.toString(),
+                    replyTo =
+                        m.replyToId?.let {
+                            linkedMapOf(
+                                "speaker" to m.replyToName,
+                                "text" to MessageCrypto.decrypt(m.replyToText, key),
+                            )
+                        },
+                )
+            }
+        return BuiltMessages(system, turns)
+    }
+
+    @Transactional(readOnly = true)
+    override fun exportTraining(
+        ownerId: Long,
+        roomId: Long,
+        assistantId: Long,
+        limit: Int,
+    ): Map<String, Any?> {
+        roomService.requireOwned(ownerId, roomId)
+        val built = buildMessages(ownerId, roomId, assistantId, limit)
+        val out = mutableListOf<Map<String, Any?>>(linkedMapOf("role" to "system", "content" to built.system))
+        for (t in built.turns) {
             val msg =
                 linkedMapOf<String, Any?>(
-                    "role" to if (m.personaId == assistantId) "assistant" else "user",
-                    "content" to content,
-                    "speaker" to nameOf(m.personaId),
-                    "at" to m.sentAt.toString(),
+                    "role" to t.role,
+                    "content" to t.content,
+                    "speaker" to t.speaker,
+                    "at" to t.at,
                 )
-            if (m.replyToId != null) {
-                msg["reply_to"] =
-                    linkedMapOf(
-                        "speaker" to m.replyToName,
-                        "text" to MessageCrypto.decrypt(m.replyToText, key),
-                    )
-            }
+            t.replyTo?.let { msg["reply_to"] = it }
             out += msg
         }
         return linkedMapOf("messages" to out)
@@ -286,29 +314,17 @@ class MessageServiceImpl(
         personaId: Long,
     ): MessageResponse {
         roomService.requireOwned(ownerId, roomId)
-        val persona =
-            personaRepository.findByIdAndOwnerId(personaId, ownerId) ?: notFound("persona not found")
+        personaRepository.findByIdAndOwnerId(personaId, ownerId) ?: notFound("persona not found")
         val key = userService.get(ownerId)?.encKey
-        val byId = personaRepository.findByOwnerIdOrderByCreatedAtAsc(ownerId).associateBy { it.id }
-        val rows =
-            repository
-                .findByRoomIdOrderBySentAtDescIdDesc(roomId, PageRequest.of(0, 40))
-                .reversed()
-
-        val system =
-            "너는 '${persona.name}'이다." +
-                (persona.bio?.takeIf { it.isNotBlank() }?.let { " 인물 설정: $it." } ?: "") +
-                " 아래 대화 맥락에 이어 '${persona.name}'로서 다음에 보낼 메시지 한 개만 한국어로 자연스럽게 작성해라." +
-                " 이름표나 따옴표 없이 대사 내용만 출력해라."
-        val chat = mutableListOf(mapOf("role" to "system", "content" to system))
-        for (m in rows) {
-            val plain = MessageCrypto.decrypt(m.content, key).trim()
-            if (plain.isEmpty()) continue
-            if (m.personaId == personaId) {
-                chat += mapOf("role" to "assistant", "content" to plain)
-            } else {
-                chat += mapOf("role" to "user", "content" to "${byId[m.personaId]?.name ?: "상대"}: $plain")
-            }
+        // Same content/system as the JSON export; projected to chat messages
+        // (the chat API only takes role+content, so the speaker is folded into
+        // user turns and a final instruction line continues the conversation).
+        val built = buildMessages(ownerId, roomId, personaId, 40)
+        val chat = mutableListOf(mapOf("role" to "system", "content" to built.system))
+        for (t in built.turns) {
+            if (t.content.isEmpty()) continue
+            val content = if (t.role == "assistant") t.content else "${t.speaker}: ${t.content}"
+            chat += mapOf("role" to t.role, "content" to content)
         }
 
         val reply = aiService.complete(chat)

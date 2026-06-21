@@ -14,6 +14,6 @@ data class AppProperties(
 
 data class OpenAiProperties(
     val apiKey: String = "",
-    val model: String = "gpt-4o-mini",
+    val model: String = "gpt-5.5",
     val baseUrl: String = "https://api.openai.com",
 )
