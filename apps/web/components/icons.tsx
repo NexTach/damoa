@@ -169,6 +169,23 @@ export function IconStar({
   );
 }
 
+export function IconClock({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+export function IconCheck({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden>
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
 export function IconMail({ size = 16, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden>

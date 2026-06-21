@@ -78,4 +78,12 @@ interface MessageService {
         messageId: Long,
         pinned: Boolean,
     ): MessageResponse
+
+    /** Shifts the given messages' times by [deltaMs] (relative gaps preserved). */
+    fun shiftTimes(
+        ownerId: Long,
+        roomId: Long,
+        ids: List<Long>,
+        deltaMs: Long,
+    )
 }

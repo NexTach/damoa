@@ -13,6 +13,11 @@ interface MessageRepository : JpaRepository<Message, Long> {
         roomId: Long,
     ): Message?
 
+    fun findByRoomIdAndIdIn(
+        roomId: Long,
+        ids: Collection<Long>,
+    ): List<Message>
+
     fun deleteByRoomId(roomId: Long)
 
     fun countByRoomId(roomId: Long): Long

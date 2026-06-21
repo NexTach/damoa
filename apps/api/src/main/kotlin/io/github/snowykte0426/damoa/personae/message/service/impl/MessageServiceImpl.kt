@@ -263,6 +263,21 @@ class MessageServiceImpl(
         }
 
     @Transactional
+    override fun shiftTimes(
+        ownerId: Long,
+        roomId: Long,
+        ids: List<Long>,
+        deltaMs: Long,
+    ) {
+        roomService.requireOwned(ownerId, roomId)
+        if (ids.isEmpty() || deltaMs == 0L) return
+        val msgs = repository.findByRoomIdAndIdIn(roomId, ids)
+        msgs.forEach { it.sentAt = it.sentAt.plusMillis(deltaMs) }
+        repository.saveAll(msgs)
+        roomService.touch(roomId)
+    }
+
+    @Transactional
     override fun setPin(
         ownerId: Long,
         roomId: Long,

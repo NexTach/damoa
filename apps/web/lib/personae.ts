@@ -333,3 +333,14 @@ export const pinMessage = (
     method: "PATCH",
     body: JSON.stringify({ pinned }),
   });
+
+/** Shifts the given messages' times by deltaMs (relative gaps preserved). */
+export const shiftMessages = (
+  roomId: number,
+  ids: number[],
+  deltaMs: number,
+) =>
+  tm<void>(`/rooms/${roomId}/messages/shift`, {
+    method: "POST",
+    body: JSON.stringify({ ids, deltaMs }),
+  });
