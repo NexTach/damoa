@@ -33,6 +33,9 @@ class MessageServiceImpl(
     private val publicBase = props.s3.publicBase
     private val searchPageSize = 100
 
+    // Context size for AI generation — same hard cap as the training export.
+    private val aiContextLimit = 2000
+
     @Transactional(readOnly = true)
     override fun list(
         ownerId: Long,
@@ -316,10 +319,9 @@ class MessageServiceImpl(
         roomService.requireOwned(ownerId, roomId)
         personaRepository.findByIdAndOwnerId(personaId, ownerId) ?: notFound("persona not found")
         val key = userService.get(ownerId)?.encKey
-        // Same content/system as the JSON export; projected to chat messages
-        // (the chat API only takes role+content, so the speaker is folded into
-        // user turns and a final instruction line continues the conversation).
-        val built = buildMessages(ownerId, roomId, personaId, 40)
+        // Same content/system AND same context size as the JSON export
+        // (projected to chat messages: speaker folded into user turns).
+        val built = buildMessages(ownerId, roomId, personaId, aiContextLimit)
         val chat = mutableListOf(mapOf("role" to "system", "content" to built.system))
         for (t in built.turns) {
             if (t.content.isEmpty()) continue
