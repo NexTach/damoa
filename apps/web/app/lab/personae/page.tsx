@@ -20,6 +20,7 @@ import {
   IconClock,
   IconCopy,
   IconDownload,
+  IconEyeOff,
   IconFile,
   IconMail,
   IconPaperclip,
@@ -43,6 +44,7 @@ const TalkStats = dynamic(() => import("@/components/talk-stats"), {
 
 import {
   type AttachmentKind,
+  aiStatus,
   attachmentKind,
   CLIENT_ID,
   clearToken,
@@ -55,15 +57,16 @@ import {
   deleteRoom,
   encryptText,
   eventsUrl,
+  exportTrainingUrl,
   FileTooLargeError,
   fetchMe,
   fetchOg,
   fileUrl,
-  getToken,
-  hydrateMessages,
-  aiStatus,
-  exportTrainingUrl,
+  generateHidden,
   generateReply,
+  getToken,
+  hideMessage,
+  hydrateMessages,
   isAuthError,
   listLetters,
   listMessages,
@@ -811,8 +814,7 @@ function PersonaeInner() {
     });
     setRoom(updated);
     setRooms((cur) => cur.map((r) => (r.id === updated.id ? updated : r)));
-    if (sender == null)
-      setSender(updated.participantPersonaIds[0] ?? null);
+    if (sender == null) setSender(updated.participantPersonaIds[0] ?? null);
   };
 
   // Export the room as an OpenAI chat fine-tuning JSON. The server decrypts and
@@ -953,6 +955,27 @@ function PersonaeInner() {
     if (!ok) return;
     await deleteMessage(room.id, id);
     setMessages((cur) => cur.filter((m) => m.id !== id));
+  };
+
+  // Hide a real message: it vanishes from the chat and search/export, but still
+  // counts in stats. Irreversible — warn before doing it.
+  const hideMsg = async (id: number) => {
+    if (!room) return;
+    const ok = await dialog.confirm(
+      "이 메시지를 숨기면 대화·검색·내보내기에서 완전히 사라지고, 통계에만 남아요. 다시 되돌릴 수 없어요.",
+      { title: "메시지 숨기기", confirmText: "숨기기", danger: true },
+    );
+    if (!ok) return;
+    await hideMessage(room.id, id);
+    setMessages((cur) => cur.filter((m) => m.id !== id));
+    notify("메시지를 숨겼어요");
+  };
+
+  // Bulk-create hidden decoy messages on a chosen day (counted only in stats).
+  const makeHidden = async (date: string, count: number) => {
+    if (!room) return;
+    const { created } = await generateHidden(room.id, date, count);
+    notify(`숨김 메시지 ${created}개를 ${date}에 추가했어요`);
   };
 
   // Time-shift: enter selection mode anchored on a message, toggle others,
@@ -1118,9 +1141,7 @@ function PersonaeInner() {
       const updated = await updateMessage(room.id, editing.id, {
         personaId: editing.personaId,
         content: await encryptText(editing.content),
-        ...(timeChanged
-          ? { sentAt: new Date(editing.at).toISOString() }
-          : {}),
+        ...(timeChanged ? { sentAt: new Date(editing.at).toISOString() } : {}),
       });
       const msg = await decryptMessage(updated);
       setMessages((cur) =>
@@ -1408,6 +1429,7 @@ function PersonaeInner() {
               onPatch={patchRoom}
               onExport={exportRoom}
               exporting={exporting}
+              onGenerateHidden={makeHidden}
               onClose={() => setSettingsOpen(false)}
             />
           )}
@@ -1691,193 +1713,197 @@ function PersonaeInner() {
               </button>
             </div>
           ) : (
-          <div className="pb-safe border-t border-[var(--line)] px-4 pt-4 md:px-6 md:pb-4">
-            {replyTo && (
-              <div className="mb-3 flex items-center gap-2 overflow-hidden rounded-xl border-l-2 border-[var(--accent)] bg-[var(--surface)] px-3 py-2">
-                <IconReply
-                  size={14}
-                  className="shrink-0 text-[var(--accent)]"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-mono text-[10px] text-[var(--muted)]">
-                    {personaBy(replyTo.personaId)?.name ?? "메시지"}에게 답장
+            <div className="pb-safe border-t border-[var(--line)] px-4 pt-4 md:px-6 md:pb-4">
+              {replyTo && (
+                <div className="mb-3 flex items-center gap-2 overflow-hidden rounded-xl border-l-2 border-[var(--accent)] bg-[var(--surface)] px-3 py-2">
+                  <IconReply
+                    size={14}
+                    className="shrink-0 text-[var(--accent)]"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-mono text-[10px] text-[var(--muted)]">
+                      {personaBy(replyTo.personaId)?.name ?? "메시지"}에게 답장
+                    </div>
+                    <div className="truncate text-[12px] text-[var(--muted)]">
+                      {msgPreview(replyTo)}
+                    </div>
                   </div>
-                  <div className="truncate text-[12px] text-[var(--muted)]">
-                    {msgPreview(replyTo)}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyTo(null)}
+                    aria-label="답장 취소"
+                    className="shrink-0 text-[var(--muted)] hover:text-[#ff5e3a]"
+                  >
+                    <IconX size={14} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setReplyTo(null)}
-                  aria-label="답장 취소"
-                  className="shrink-0 text-[var(--muted)] hover:text-[#ff5e3a]"
-                >
-                  <IconX size={14} />
-                </button>
-              </div>
-            )}
-            {!capture && (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {room.participantPersonaIds.length === 0 && (
-                  <span className="font-mono text-[10px] text-[var(--muted)]">
-                    '참여자 · 설정'에서 페르소나를 추가하세요
+              )}
+              {!capture && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {room.participantPersonaIds.length === 0 && (
+                    <span className="font-mono text-[10px] text-[var(--muted)]">
+                      '참여자 · 설정'에서 페르소나를 추가하세요
+                    </span>
+                  )}
+                  {room.participantPersonaIds.map((pid) => {
+                    const p = personaBy(pid);
+                    const active = sender === pid;
+                    return (
+                      <button
+                        key={pid}
+                        type="button"
+                        onClick={() => setSender(pid)}
+                        className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors ${
+                          active
+                            ? "border-transparent text-black"
+                            : "border-[var(--line)] text-[var(--muted)]"
+                        }`}
+                        style={active ? { background: p?.color } : undefined}
+                      >
+                        <Avatar persona={p} size={16} />
+                        {p?.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {capture && sender != null && (
+                <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] px-2.5 py-1 font-mono text-[11px] text-[var(--muted)]">
+                  <Avatar persona={personaBy(sender)} size={16} />
+                  {personaBy(sender)?.name}
+                  <span className="opacity-60">(으)로 전송</span>
+                </div>
+              )}
+              {!uploading && pending && (
+                <div className="mb-3 inline-flex max-w-full items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1.5">
+                  {pending.type.startsWith("image/") ? (
+                    <img
+                      src={pending.url}
+                      alt=""
+                      className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                    />
+                  ) : pending.type.startsWith("video/") ? (
+                    // biome-ignore lint/a11y/useMediaCaption: preview of staged clip
+                    <video
+                      src={pending.url}
+                      className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-[var(--surface)] text-[var(--muted)]">
+                      <IconFile size={20} />
+                    </span>
+                  )}
+                  <span className="min-w-0 truncate px-1 font-mono text-[11px] text-[var(--muted)]">
+                    {pending.name ?? "첨부됨"}
                   </span>
-                )}
-                {room.participantPersonaIds.map((pid) => {
-                  const p = personaBy(pid);
-                  const active = sender === pid;
-                  return (
-                    <button
-                      key={pid}
-                      type="button"
-                      onClick={() => setSender(pid)}
-                      className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors ${
-                        active
-                          ? "border-transparent text-black"
-                          : "border-[var(--line)] text-[var(--muted)]"
-                      }`}
-                      style={active ? { background: p?.color } : undefined}
-                    >
-                      <Avatar persona={p} size={16} />
-                      {p?.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {capture && sender != null && (
-              <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] px-2.5 py-1 font-mono text-[11px] text-[var(--muted)]">
-                <Avatar persona={personaBy(sender)} size={16} />
-                {personaBy(sender)?.name}
-                <span className="opacity-60">(으)로 전송</span>
-              </div>
-            )}
-            {!uploading && pending && (
-              <div className="mb-3 inline-flex max-w-full items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-2)] p-1.5">
-                {pending.type.startsWith("image/") ? (
-                  <img
-                    src={pending.url}
-                    alt=""
-                    className="h-12 w-12 shrink-0 rounded-lg object-cover"
-                  />
-                ) : pending.type.startsWith("video/") ? (
-                  // biome-ignore lint/a11y/useMediaCaption: preview of staged clip
-                  <video
-                    src={pending.url}
-                    className="h-12 w-12 shrink-0 rounded-lg object-cover"
-                  />
-                ) : (
-                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-[var(--surface)] text-[var(--muted)]">
-                    <IconFile size={20} />
-                  </span>
-                )}
-                <span className="min-w-0 truncate px-1 font-mono text-[11px] text-[var(--muted)]">
-                  {pending.name ?? "첨부됨"}
-                </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      URL.revokeObjectURL(pending.url);
+                      setPending(null);
+                    }}
+                    aria-label="첨부 제거"
+                    className="grid h-6 w-6 shrink-0 place-items-center text-[var(--muted)] hover:text-[#ff5e3a]"
+                  >
+                    <IconX size={14} />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-end gap-2">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  hidden
+                  onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+                />
                 <button
                   type="button"
-                  onClick={() => {
-                    URL.revokeObjectURL(pending.url);
-                    setPending(null);
-                  }}
-                  aria-label="첨부 제거"
-                  className="grid h-6 w-6 shrink-0 place-items-center text-[var(--muted)] hover:text-[#ff5e3a]"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={sender == null || busy}
+                  aria-label="파일 첨부"
+                  title="사진·동영상·파일 첨부"
+                  className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-[var(--line)] bg-[var(--bg-2)] text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30"
                 >
-                  <IconX size={14} />
-                </button>
-              </div>
-            )}
-            <div className="flex items-end gap-2">
-              <input
-                ref={fileRef}
-                type="file"
-                hidden
-                onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-              />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={sender == null || busy}
-                aria-label="파일 첨부"
-                title="사진·동영상·파일 첨부"
-                className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-[var(--line)] bg-[var(--bg-2)] text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30"
-              >
-                {uploading ? (
-                  <Spinner size={16} />
-                ) : (
-                  <IconPaperclip size={18} />
-                )}
-              </button>
-              {aiEnabled && (
-                <button
-                  type="button"
-                  onClick={generate}
-                  disabled={sender == null || busy || generating}
-                  aria-label="AI로 다음 대사 생성"
-                  title="AI로 다음 대사 생성"
-                  className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-[var(--line)] bg-[var(--bg-2)] text-[var(--accent)] hover:text-[var(--fg)] disabled:opacity-30"
-                >
-                  {generating ? (
+                  {uploading ? (
                     <Spinner size={16} />
                   ) : (
-                    <IconSparkle size={18} />
+                    <IconPaperclip size={18} />
                   )}
                 </button>
-              )}
-              <textarea
-                ref={composerRef}
-                value={draft}
-                // Ignore edits while sending (soft block) — without touching
-                // disabled/readOnly, which would dismiss the mobile keyboard.
-                onChange={(e) => {
-                  if (!sending) setDraft(e.target.value);
-                }}
-                onPaste={(e) => {
-                  // Paste an image/file from the clipboard → attach it.
-                  const file = Array.from(e.clipboardData.items)
-                    .find((it) => it.kind === "file")
-                    ?.getAsFile();
-                  if (file && sender != null && !busy) {
-                    e.preventDefault();
-                    pickFile(file);
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-                rows={1}
-                placeholder={
-                  sender != null ? "메시지 보내기" : "보낸 사람을 먼저 고르세요"
-                }
-                // Stay enabled while sending so focus (and the mobile keyboard)
-                // is never lost — input is soft-blocked in onChange instead.
-                disabled={sender == null}
-                className={`no-scrollbar max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50 ${sending ? "opacity-60" : ""}`}
-              />
-              <button
-                type="button"
-                // Keep focus on the textarea so the mobile keyboard stays open.
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  composerRef.current?.focus();
-                  send();
-                }}
-                disabled={sender == null || busy || (!draft.trim() && !pending)}
-                aria-label="전송"
-                title="전송"
-                className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-[var(--fg)] text-[var(--bg)] transition-opacity disabled:opacity-30"
-              >
-                {sending ? (
-                  <span className="animate-pulse">…</span>
-                ) : (
-                  <IconSend size={18} />
+                {aiEnabled && (
+                  <button
+                    type="button"
+                    onClick={generate}
+                    disabled={sender == null || busy || generating}
+                    aria-label="AI로 다음 대사 생성"
+                    title="AI로 다음 대사 생성"
+                    className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-[var(--line)] bg-[var(--bg-2)] text-[var(--accent)] hover:text-[var(--fg)] disabled:opacity-30"
+                  >
+                    {generating ? (
+                      <Spinner size={16} />
+                    ) : (
+                      <IconSparkle size={18} />
+                    )}
+                  </button>
                 )}
-              </button>
+                <textarea
+                  ref={composerRef}
+                  value={draft}
+                  // Ignore edits while sending (soft block) — without touching
+                  // disabled/readOnly, which would dismiss the mobile keyboard.
+                  onChange={(e) => {
+                    if (!sending) setDraft(e.target.value);
+                  }}
+                  onPaste={(e) => {
+                    // Paste an image/file from the clipboard → attach it.
+                    const file = Array.from(e.clipboardData.items)
+                      .find((it) => it.kind === "file")
+                      ?.getAsFile();
+                    if (file && sender != null && !busy) {
+                      e.preventDefault();
+                      pickFile(file);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                  rows={1}
+                  placeholder={
+                    sender != null
+                      ? "메시지 보내기"
+                      : "보낸 사람을 먼저 고르세요"
+                  }
+                  // Stay enabled while sending so focus (and the mobile keyboard)
+                  // is never lost — input is soft-blocked in onChange instead.
+                  disabled={sender == null}
+                  className={`no-scrollbar max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-[var(--line)] bg-[var(--bg-2)] px-4 py-2.5 text-sm outline-none transition-opacity placeholder:text-[var(--muted)] focus:border-[var(--muted)] disabled:opacity-50 ${sending ? "opacity-60" : ""}`}
+                />
+                <button
+                  type="button"
+                  // Keep focus on the textarea so the mobile keyboard stays open.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    composerRef.current?.focus();
+                    send();
+                  }}
+                  disabled={
+                    sender == null || busy || (!draft.trim() && !pending)
+                  }
+                  aria-label="전송"
+                  title="전송"
+                  className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-[var(--fg)] text-[var(--bg)] transition-opacity disabled:opacity-30"
+                >
+                  {sending ? (
+                    <span className="animate-pulse">…</span>
+                  ) : (
+                    <IconSend size={18} />
+                  )}
+                </button>
+              </div>
             </div>
-          </div>
           )}
         </section>
       )}
@@ -1967,6 +1993,11 @@ function PersonaeInner() {
             const msg = actionMsg;
             setActionMsg(null);
             startShift(msg);
+          }}
+          onHide={() => {
+            const id = actionMsg.id;
+            setActionMsg(null);
+            hideMsg(id);
           }}
           onDelete={() => {
             const id = actionMsg.id;
@@ -2127,6 +2158,7 @@ function ActionSheet({
   onCopy,
   onEdit,
   onShift,
+  onHide,
   onDelete,
   onClose,
 }: {
@@ -2140,6 +2172,7 @@ function ActionSheet({
   onCopy: () => void;
   onEdit: () => void;
   onShift: () => void;
+  onHide: () => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -2171,6 +2204,11 @@ function ActionSheet({
             icon={<IconClock size={16} />}
             label="시간 이동"
             onClick={onShift}
+          />
+          <MenuItem
+            icon={<IconEyeOff size={16} />}
+            label="메시지 숨기기"
+            onClick={onHide}
           />
           <MenuItem
             icon={<IconTrash size={16} />}
@@ -2360,6 +2398,7 @@ function RoomSettings({
   onPatch,
   onExport,
   exporting,
+  onGenerateHidden,
   onClose,
 }: {
   room: Room;
@@ -2367,10 +2406,27 @@ function RoomSettings({
   onPatch: (patch: Partial<Room>) => void;
   onExport: (assistantId: number) => void;
   exporting: boolean;
+  onGenerateHidden: (date: string, count: number) => Promise<void>;
   onClose: () => void;
 }) {
   const personaBy = (id: number) => personas.find((p) => p.id === id);
   const [title, setTitle] = useState(room.title);
+  // Hidden-message generator state (date defaults to today in KST).
+  const today = new Date().toLocaleDateString("sv-SE", {
+    timeZone: "Asia/Seoul",
+  });
+  const [hiddenDate, setHiddenDate] = useState(today);
+  const [hiddenCount, setHiddenCount] = useState(10);
+  const [hiddenBusy, setHiddenBusy] = useState(false);
+  const runHidden = async () => {
+    if (hiddenBusy || !hiddenDate || hiddenCount < 1) return;
+    setHiddenBusy(true);
+    try {
+      await onGenerateHidden(hiddenDate, hiddenCount);
+    } finally {
+      setHiddenBusy(false);
+    }
+  };
   const saveTitle = () => {
     const t = title.trim();
     if (t && t !== room.title) onPatch({ title: t });
@@ -2483,6 +2539,49 @@ function RoomSettings({
                 추출 중…
               </div>
             )}
+          </div>
+        )}
+
+        {/* 숨김 메시지 생성 — 채팅엔 안 보이고 통계에만 잡히는 메시지 */}
+        {room.participantPersonaIds.length > 0 && (
+          <div className="mt-4 border-t border-[var(--line)] pt-3">
+            <div className="pb-2 font-mono text-[10px] tracking-[0.3em] text-[var(--muted)]">
+              숨김 메시지 생성
+            </div>
+            <p className="pb-2 font-mono text-[10px] leading-relaxed text-[var(--muted)]">
+              고른 날짜(00:00~23:59)에 랜덤 시각으로 메시지를 만들어 참여자에게
+              고르게 나눠줘요. 대화·검색·내보내기엔 안 보이고 통계에만 잡혀요.
+            </p>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={hiddenDate}
+                onChange={(e) => setHiddenDate(e.target.value)}
+                className="flex-1 rounded-md border border-[var(--line)] bg-transparent px-2 py-1.5 text-[12px] outline-none focus:border-[var(--muted)]"
+              />
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={hiddenCount}
+                onChange={(e) =>
+                  setHiddenCount(
+                    Math.max(1, Math.min(500, Number(e.target.value) || 1)),
+                  )
+                }
+                aria-label="개수"
+                className="w-16 rounded-md border border-[var(--line)] bg-transparent px-2 py-1.5 text-center text-[12px] outline-none focus:border-[var(--muted)]"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={hiddenBusy}
+              onClick={runHidden}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-[var(--line)] px-2.5 py-1.5 font-mono text-[11px] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-40"
+            >
+              <IconEyeOff size={12} />
+              {hiddenBusy ? "생성 중…" : `${hiddenCount}개 숨김 추가`}
+            </button>
           </div>
         )}
       </div>
@@ -2807,8 +2906,8 @@ function ShiftModal({
           </button>
         </div>
         <p className="mb-3 font-mono text-[11px] leading-relaxed text-[var(--muted)]">
-          기준 메시지의 새 시각을 정하면 선택한 {count}개 메시지가 같은
-          간격을 유지한 채 함께 이동해요.
+          기준 메시지의 새 시각을 정하면 선택한 {count}개 메시지가 같은 간격을
+          유지한 채 함께 이동해요.
         </p>
         <input
           type="datetime-local"
@@ -3087,8 +3186,7 @@ function HighlightsPanel({
             {letters?.length === 0 && (
               <p className="px-2 py-10 text-center font-mono text-[12px] leading-relaxed text-[var(--muted)]">
                 아직 편지가 없어요.
-                <br />
-                긴 메시지는 자동으로 편지가 되어 여기에 모여요.
+                <br />긴 메시지는 자동으로 편지가 되어 여기에 모여요.
               </p>
             )}
             <div className="space-y-2">

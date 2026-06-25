@@ -93,4 +93,26 @@ interface MessageService {
         roomId: Long,
         personaId: Long,
     ): MessageResponse
+
+    /**
+     * Hides a real message: it vanishes from the chat (normal and capture) and
+     * from search/letters/export/AI, but still counts in stats. Irreversible.
+     */
+    fun hideMessage(
+        ownerId: Long,
+        roomId: Long,
+        messageId: Long,
+    )
+
+    /**
+     * Creates [count] hidden messages dated within [date] (KST, 00:00–23:59) at
+     * random times, authored evenly across the room's participants. They show up
+     * only in stats. [date] is an ISO local date (yyyy-MM-dd).
+     */
+    fun generateHidden(
+        ownerId: Long,
+        roomId: Long,
+        date: String,
+        count: Int,
+    ): Int
 }

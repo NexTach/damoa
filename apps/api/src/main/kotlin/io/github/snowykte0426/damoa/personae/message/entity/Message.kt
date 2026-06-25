@@ -22,6 +22,7 @@ open class Message(
     open var attachmentName: String? = null, // original file name (for non-media files)
     open var attachmentExpired: Boolean = false, // true after the file was auto-purged
     open var pinned: Boolean = false, // highlighted: excluded from attachment auto-expiry
+    open var hidden: Boolean = false, // hidden: never shown in chat (normal or capture), counted only in stats
     open var replyToId: Long? = null, // message this one replies to
     open var replyToName: String? = null, // snapshot: replied persona name
     @Column(columnDefinition = "TEXT")

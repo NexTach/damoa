@@ -1,6 +1,7 @@
 package io.github.snowykte0426.damoa.personae.message.controller
 
 import io.github.snowykte0426.damoa.common.currentUserId
+import io.github.snowykte0426.damoa.personae.message.dto.request.GenerateHiddenRequest
 import io.github.snowykte0426.damoa.personae.message.dto.request.GenerateRequest
 import io.github.snowykte0426.damoa.personae.message.dto.request.MessageRequest
 import io.github.snowykte0426.damoa.personae.message.dto.request.PinRequest
@@ -98,6 +99,32 @@ class MessageController(
     fun letters(
         @PathVariable roomId: Long,
     ): List<MessageResponse> = service.listLetters(currentUserId(), roomId)
+
+    // Hide a real message: it leaves the chat (normal + capture) and search/export,
+    // but still counts in stats. Irreversible — guarded by a client warning.
+    @PatchMapping("/{messageId}/hide")
+    fun hide(
+        @PathVariable roomId: Long,
+        @PathVariable messageId: Long,
+        @RequestHeader(value = "X-Client-Id", required = false) clientId: String?,
+    ) {
+        val uid = currentUserId()
+        service.hideMessage(uid, roomId, messageId)
+        realtime.publish(uid, RealtimeEvent("message", roomId, clientId))
+    }
+
+    // Bulk-create hidden decoy messages on a chosen day (counted only in stats).
+    @PostMapping("/hidden")
+    fun generateHidden(
+        @PathVariable roomId: Long,
+        @RequestBody req: GenerateHiddenRequest,
+        @RequestHeader(value = "X-Client-Id", required = false) clientId: String?,
+    ): Map<String, Int> {
+        val uid = currentUserId()
+        val created = service.generateHidden(uid, roomId, req.date, req.count)
+        realtime.publish(uid, RealtimeEvent("message", roomId, clientId))
+        return mapOf("created" to created)
+    }
 
     @PatchMapping("/{messageId}/pin")
     fun pin(

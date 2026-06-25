@@ -335,14 +335,28 @@ export const pinMessage = (
   });
 
 /** Shifts the given messages' times by deltaMs (relative gaps preserved). */
-export const shiftMessages = (
-  roomId: number,
-  ids: number[],
-  deltaMs: number,
-) =>
+export const shiftMessages = (roomId: number, ids: number[], deltaMs: number) =>
   tm<void>(`/rooms/${roomId}/messages/shift`, {
     method: "POST",
     body: JSON.stringify({ ids, deltaMs }),
+  });
+
+/**
+ * Hides a real message: it disappears from the chat (normal + capture) and from
+ * search/letters/export/AI, but still counts in stats. Irreversible.
+ */
+export const hideMessage = (roomId: number, messageId: number) =>
+  tm<void>(`/rooms/${roomId}/messages/${messageId}/hide`, { method: "PATCH" });
+
+/**
+ * Bulk-creates `count` hidden decoy messages dated within `date` (yyyy-MM-dd,
+ * KST) at random times, authored evenly across the room's participants. They
+ * surface only in stats. Returns how many were created.
+ */
+export const generateHidden = (roomId: number, date: string, count: number) =>
+  tm<{ created: number }>(`/rooms/${roomId}/messages/hidden`, {
+    method: "POST",
+    body: JSON.stringify({ date, count }),
   });
 
 /** Whether server-side AI generation is configured (OpenAI key present). */

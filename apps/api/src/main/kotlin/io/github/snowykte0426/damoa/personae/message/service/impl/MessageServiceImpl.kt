@@ -20,6 +20,9 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import kotlin.random.Random
 
 @Service
 class MessageServiceImpl(
@@ -56,7 +59,7 @@ class MessageServiceImpl(
                     val (ts, id) = decodeCursor(before)
                     repository.findOlder(roomId, ts, id, page)
                 }
-                else -> repository.findByRoomIdOrderBySentAtDescIdDesc(roomId, page)
+                else -> repository.findByRoomIdAndHiddenFalseOrderBySentAtDescIdDesc(roomId, page)
             }
         val hasMore = desc.size > limit
         val rows = desc.take(limit) // newest → oldest within page
@@ -165,7 +168,7 @@ class MessageServiceImpl(
         roomId: Long,
     ): List<MessageResponse> {
         roomService.requireOwned(ownerId, roomId)
-        return repository.findByRoomIdAndPinnedTrueOrderBySentAtDescIdDesc(roomId).map { it.toResponse(publicBase) }
+        return repository.findByRoomIdAndPinnedTrueAndHiddenFalseOrderBySentAtDescIdDesc(roomId).map { it.toResponse(publicBase) }
     }
 
     @Transactional(readOnly = true)
@@ -206,7 +209,7 @@ class MessageServiceImpl(
         val key = userService.get(ownerId)?.encKey
         val rows =
             repository
-                .findByRoomIdOrderBySentAtDescIdDesc(roomId, PageRequest.of(0, limit))
+                .findByRoomIdAndHiddenFalseOrderBySentAtDescIdDesc(roomId, PageRequest.of(0, limit))
                 .reversed()
         val byId = personaRepository.findByOwnerIdOrderByCreatedAtAsc(ownerId).associateBy { it.id }
         val appearingIds = (rows.map { it.personaId } + assistantId).toSet()
@@ -356,8 +359,55 @@ class MessageServiceImpl(
         return repository.save(message).toResponse(publicBase)
     }
 
+    @Transactional
+    override fun hideMessage(
+        ownerId: Long,
+        roomId: Long,
+        messageId: Long,
+    ) {
+        roomService.requireOwned(ownerId, roomId)
+        val message = find(roomId, messageId)
+        message.hidden = true
+        repository.save(message)
+        roomService.touch(roomId)
+    }
+
+    @Transactional
+    override fun generateHidden(
+        ownerId: Long,
+        roomId: Long,
+        date: String,
+        count: Int,
+    ): Int {
+        roomService.requireOwned(ownerId, roomId)
+        val n = count.coerceIn(1, 500)
+        val participants = roomService.get(ownerId, roomId).participantPersonaIds
+        if (participants.isEmpty()) notFound("room has no participants")
+        // Even author split: round-robin over a shuffled order so the remainder
+        // (count % participants) lands on random participants, not always the first.
+        val authors = participants.shuffled()
+        // Random second within the chosen KST calendar day (00:00:00–23:59:59).
+        val dayStart = LocalDate.parse(date).atStartOfDay(seoul).toInstant()
+        val rows =
+            (0 until n).map { i ->
+                Message(
+                    roomId = roomId,
+                    personaId = authors[i % authors.size],
+                    content = "",
+                    hidden = true,
+                    sentAt = dayStart.plusSeconds(Random.nextLong(0, 86_400)),
+                )
+            }
+        repository.saveAll(rows)
+        return rows.size
+    }
+
     private fun find(
         roomId: Long,
         messageId: Long,
     ): Message = repository.findByIdAndRoomId(messageId, roomId) ?: notFound("message not found")
+
+    private companion object {
+        private val seoul = ZoneId.of("Asia/Seoul")
+    }
 }

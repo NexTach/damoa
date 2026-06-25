@@ -204,6 +204,17 @@ export function IconMail({ size = 16, className }: IconProps) {
   );
 }
 
+export function IconEyeOff({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className} aria-hidden>
+      <path d="M10.7 5.1A10.4 10.4 0 0 1 12 5c5 0 9 4.5 10 7a13.2 13.2 0 0 1-2.2 3.2" />
+      <path d="M6.6 6.6A13.3 13.3 0 0 0 2 12c1 2.5 5 7 10 7a10.3 10.3 0 0 0 4.9-1.2" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+      <path d="M2 2l20 20" />
+    </svg>
+  );
+}
+
 export function IconChart({ size = 16, className }: IconProps) {
   return (
     <svg {...base(size)} className={className} aria-hidden>

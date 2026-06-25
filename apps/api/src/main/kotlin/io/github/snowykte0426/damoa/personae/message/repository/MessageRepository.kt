@@ -26,14 +26,14 @@ interface MessageRepository : JpaRepository<Message, Long> {
     fun findByAttachmentKeyIsNotNullAndAttachmentExpiredFalseAndPinnedFalseAndCreatedAtBefore(cutoff: Instant): List<Message>
 
     // Highlighted attachments of a room, newest first.
-    fun findByRoomIdAndPinnedTrueOrderBySentAtDescIdDesc(roomId: Long): List<Message>
+    fun findByRoomIdAndPinnedTrueAndHiddenFalseOrderBySentAtDescIdDesc(roomId: Long): List<Message>
 
     // Search candidates (sender/date filtered); content match is done in memory
-    // after decryption. Newest first.
+    // after decryption. Hidden messages are excluded. Newest first.
     @Query(
         """
         select m from Message m
-        where m.roomId = :roomId
+        where m.roomId = :roomId and m.hidden = false
           and (:personaId is null or m.personaId = :personaId)
           and (:after is null or m.sentAt >= :after)
           and (:before is null or m.sentAt <= :before)
@@ -48,11 +48,11 @@ interface MessageRepository : JpaRepository<Message, Long> {
     ): List<Message>
 
     // Letter candidates: only messages long enough to possibly be a letter
-    // (avoids decrypting every short message). Newest first.
+    // (avoids decrypting every short message). Hidden messages excluded. Newest first.
     @Query(
         """
         select m from Message m
-        where m.roomId = :roomId and length(m.content) >= 150
+        where m.roomId = :roomId and m.hidden = false and length(m.content) >= 150
         order by m.sentAt desc, m.id desc
         """,
     )
@@ -60,8 +60,9 @@ interface MessageRepository : JpaRepository<Message, Long> {
         @Param("roomId") roomId: Long,
     ): List<Message>
 
-    // Newest page (no cursor). Caller reverses to ascending for display.
-    fun findByRoomIdOrderBySentAtDescIdDesc(
+    // Newest page (no cursor). Hidden messages excluded.
+    // Caller reverses to ascending for display.
+    fun findByRoomIdAndHiddenFalseOrderBySentAtDescIdDesc(
         roomId: Long,
         pageable: Pageable,
     ): List<Message>
@@ -70,7 +71,7 @@ interface MessageRepository : JpaRepository<Message, Long> {
     @Query(
         """
         select m from Message m
-        where m.roomId = :roomId
+        where m.roomId = :roomId and m.hidden = false
           and (m.sentAt < :ts or (m.sentAt = :ts and m.id < :id))
         order by m.sentAt desc, m.id desc
         """,
@@ -86,7 +87,7 @@ interface MessageRepository : JpaRepository<Message, Long> {
     @Query(
         """
         select m from Message m
-        where m.roomId = :roomId
+        where m.roomId = :roomId and m.hidden = false
           and (m.sentAt < :ts or (m.sentAt = :ts and m.id <= :id))
         order by m.sentAt desc, m.id desc
         """,
